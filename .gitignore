@@ -1,0 +1,36 @@
+# Build system artifacts
+build/
+CMakeFiles/
+CMakeCache.txt
+cmake_install.cmake
+Makefile
+
+# Compiled binaries and runtime outputs
+bin/
+out/
+
+# Local datasets and indices (do not publish large/private files)
+data/
+indices/
+
+# Generic editor / OS files
+.vscode/
+.idea/
+*.swp
+*.swo
+.DS_Store
+Thumbs.db
+
+# Python artifacts
+__pycache__/
+*.pyc
+*.pyo
+.venv/
+venv/
+
+# Logs
+*.log
+
+# Optional external dataset archives / temporary downloads
+anns-data/*.gz
+scripts/*.tmp

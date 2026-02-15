@@ -3016,7 +3016,7 @@ private:
         int efq_global_connectivity = 800;
         
         string base_csv_path = "";
-        string csv_path = "/home/zhangzhiwei/PG/indices/tree_analysis/performance_PGB9_2clear_sift_optimized.csv";
+        string csv_path = "out/performance_PGB9_2clear_sift_optimized.csv";
         // QPS kparameters
         int k1 = 1;
         int k2 = 10;

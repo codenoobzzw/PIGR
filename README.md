@@ -1,8 +1,61 @@
-# PGB Refactor v2
+# PGB: Post-Refinement for ANN Graph Indices
 
-Refactored post-refinement pipelines for ANN graph indices (HNSW / NSG / HCNNG), with a reproducible layout for paper code release.
+This repository contains the refactored implementation of our post-refinement pipeline for Approximate Nearest Neighbor (ANN) graph indices.
+It supports three base graph families:
 
-## 1. Build
+- HNSW
+- NSG
+- HCNNG
+
+The codebase is organized for reproducible experiments and paper-style evaluation on SIFT-128.
+
+## 1. Overview
+
+The pipeline takes a pre-built ANN graph index and performs post-refinement to improve search quality under controlled runtime overhead.
+
+Core features:
+
+- Unified runner interface for HNSW / NSG / HCNNG
+- Configurable refinement hyper-parameters (e.g., pruning ratio, core-k, efq schedule)
+- Consistent CSV logging for analysis (`out/*.csv`)
+- Standalone tool to build initial indices (`bin/build_indices`)
+
+## 2. Repository Structure
+
+```text
+pgb_github_refactor_v2/
+├─ CMakeLists.txt
+├─ README.md
+├─ anns-data/                  # bundled dataset conversion utilities
+├─ include/
+│  ├─ graph/                   # base ANN graph structures
+│  └─ pgb/                     # refiner interface + implementation
+├─ src/
+│  ├─ build_indices.cpp
+│  ├─ run_hnsw_final.cpp
+│  ├─ run_nsg_final.cpp
+│  └─ run_hcnng_final.cpp
+├─ data/                       # runtime datasets (generated locally)
+├─ indices/                    # runtime indices (generated locally)
+└─ out/                        # runtime logs (generated locally)
+```
+
+## 3. Requirements
+
+- Linux
+- CMake >= 3.16
+- C++17 compiler (GCC/Clang)
+- OpenMP
+- Python 3.8+ (for dataset conversion)
+- Python packages: `numpy`, `h5py`
+
+Install Python dependencies:
+
+```bash
+python3 -m pip install numpy h5py
+```
+
+## 4. Build
 
 From repository root:
 
@@ -11,31 +64,24 @@ cmake -S . -B build -DCMAKE_BUILD_TYPE=Release
 cmake --build build -j
 ```
 
-Executables are generated in `bin/`:
+Generated executables (in `bin/`):
 
-- `bin/run_hnsw_final`
-- `bin/run_nsg_final`
-- `bin/run_hcnng_final`
-- `bin/build_indices`
+- `run_hnsw_final`
+- `run_nsg_final`
+- `run_hcnng_final`
+- `build_indices`
 
-## 2. Dataset Preparation (use bundled `anns-data`)
+## 5. Dataset Preparation (SIFT-128)
 
-This repository already includes `anns-data/` from the original project. Use it directly.
-
-Install dependencies:
-
-```bash
-python3 -m pip install numpy h5py
-```
-
-Generate SIFT vecs data (run inside `anns-data/`):
+Use bundled `anns-data` tools:
 
 ```bash
 cd anns-data
 python3 create_dataset.py --dataset sift-128-euclidean
+cd ..
 ```
 
-Then place files into the expected runtime path:
+Copy generated files to runtime data directory:
 
 ```bash
 mkdir -p data
@@ -50,7 +96,7 @@ Expected files:
 - `data/sift-128-euclidean.test.fvecs`
 - `data/sift-128-euclidean.gt.ivecs`
 
-## 3. Build Indices
+## 6. Build Base Indices
 
 ```bash
 ./bin/build_indices \
@@ -62,13 +108,13 @@ Expected files:
   --hcnng-s 7 --hcnng-t 15 --hcnng-ls 1250
 ```
 
-Generated files:
+Default outputs:
 
 - `indices/sift-128-euclidean/hnsw/M_16_efc_96.idx`
 - `indices/sift-128-euclidean/nsg/R_64_efc_256.idx`
 - `indices/sift-128-euclidean/hcnng/s_7_T_15_Ls_1250.idx`
 
-## 4. Run
+## 7. Run Post-Refinement
 
 Run from repository root:
 
@@ -78,29 +124,28 @@ Run from repository root:
 ./bin/run_hcnng_final
 ```
 
-Outputs are written to `out/`.
+CSV logs are written to:
 
-## 5. What to upload to GitHub
+- `out/hnsw_final.csv`
+- `out/nsg_final.csv`
+- `out/hcnng_final.csv`
 
-Upload source and configs:
+## 8. Reproducibility Notes
 
-- `CMakeLists.txt`
-- `include/`
-- `src/`
-- `scripts/`
-- `anns-data/`
-- `README.md`
-- `.gitignore`
+- Keep dataset, index parameters, and thread settings fixed for fair comparison.
+- Current default runner settings target SIFT-128.
+- Key runtime paths and knobs can be adjusted in:
+  - `src/run_hnsw_final.cpp`
+  - `src/run_nsg_final.cpp`
+  - `src/run_hcnng_final.cpp`
 
-Do **not** upload generated artifacts and large runtime files:
+## 9. Common Issues
 
-- `build/`
-- `bin/`
-- `out/`
-- `data/`
-- `indices/`
+1. `Error opening file: data/...`
+   - Run binaries from repository root, or update path settings in runner files.
 
-## 6. Notes
+2. OpenMP not found during CMake configure
+   - Install OpenMP toolchain and rerun CMake configure.
 
-- If you use another dataset/index name, update paths in `src/run_hnsw_final.cpp`, `src/run_nsg_final.cpp`, `src/run_hcnng_final.cpp`.
-- OpenMP is required at build time.
+3. Output CSV not found
+   - Check `cfg.log_csv` path in the corresponding runner and ensure `out/` is writable.

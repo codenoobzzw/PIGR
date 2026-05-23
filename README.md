@@ -63,12 +63,14 @@ Runtime directories such as `data/`, `indices/`, `bin/`, `build/`, and `out/` ar
 - C++17 compiler, such as GCC or Clang
 - OpenMP
 - Python 3.8+
-- Python packages for dataset preparation, including `numpy` and `h5py`
+- Python packages for dataset preparation, including `numpy`, `h5py`, `scikit-learn`, and `psutil`
+- Additional Python packages for DBPEDIA1M preparation: `datasets` and `pandas`
 
 Install Python dependencies as needed:
 
 ```bash
-python3 -m pip install numpy h5py
+python3 -m pip install numpy h5py scikit-learn psutil
+python3 -m pip install datasets pandas
 ```
 
 ## Build
@@ -118,7 +120,30 @@ python3 create_dataset.py --dataset sift-128-euclidean
 
 and copies the generated vecs files into the repository-level `data/` directory.
 
-The paper evaluates SIFT1M, DEEP1M, DBPEDIA1M, MNIST, and AUDIO. This repository includes helper tooling for SIFT-style preparation and additional dataset download/conversion utilities under `anns-data/`, but external datasets must be downloaded according to their own licenses and terms. See `docs/DATA.md` for expected file names and layout.
+The paper evaluates SIFT1M, DEEP1M, DBPEDIA1M, MNIST, and AUDIO. The bundled `anns-data/create_dataset.py` script contains preparation entries for all five:
+
+| Paper dataset | `anns-data` dataset key | Generated vecs prefix |
+| --- | --- | --- |
+| SIFT1M | `sift-128-euclidean` | `sift-128-euclidean` |
+| DEEP1M | `deep-image-96-euclidean` | `deep-image-96-euclidean` |
+| DBPEDIA1M | `dbpedia-openai-1000k-euclidean` | `dbpedia-openai-1000k-euclidean` |
+| MNIST | `mnist-784-euclidean` | `mnist-784-euclidean` |
+| AUDIO | `audio-192-euclidean` | `audio-192-euclidean` |
+
+To prepare one of these datasets manually:
+
+```bash
+DATASET_KEY=mnist-784-euclidean
+cd anns-data
+python3 create_dataset.py --dataset "$DATASET_KEY"
+cd ..
+mkdir -p data
+cp "anns-data/data/${DATASET_KEY}.train.fvecs" data/
+cp "anns-data/data/${DATASET_KEY}.test.fvecs" data/
+cp "anns-data/data/${DATASET_KEY}.gt.ivecs" data/
+```
+
+The script writes `.hdf5`, `.train.fvecs`, `.test.fvecs`, and `.gt.ivecs` files under `anns-data/data/`. External datasets are downloaded from their upstream sources and are governed by their own licenses and terms. Full 1M-scale ground-truth generation can be slow and memory intensive because the conversion script computes brute-force nearest neighbors. See `docs/DATA.md` for dataset-specific notes and expected local layout.
 
 ## Quick Sanity Test
 

@@ -1,5 +1,5 @@
 #include <graph/hnsw.hpp>
-#include <pgb/refine_hnsw.hpp>
+#include <pigr/refine_hnsw.hpp>
 #include <filesystem>
 #include <string>
 
@@ -34,7 +34,7 @@ std::string resolve_output_path(const std::string& path)
 // Minimal entry point: adjust paths + knobs here (keep heavy logic inside the .hpp).
 int main(int /*argc*/, char** /*argv*/)
 {
-    pgb::refiner::hnsw::Config cfg;
+    pigr::refiner::hnsw::Config cfg;
 
     // === Paths (edit to your local layout) ===
     cfg.base_path  = resolve_input_path("data/sift-128-euclidean.train.fvecs");
@@ -74,5 +74,5 @@ int main(int /*argc*/, char** /*argv*/)
 
     cfg.operation_level_scope = 2;
 
-    return pgb::refiner::hnsw::run(cfg);
+    return pigr::refiner::hnsw::run(cfg);
 }

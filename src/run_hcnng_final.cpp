@@ -1,5 +1,5 @@
 #include <graph/hcnng.hpp>
-#include <pgb/refine_hcnng.hpp>
+#include <pigr/refine_hcnng.hpp>
 #include <filesystem>
 #include <string>
 
@@ -33,7 +33,7 @@ std::string resolve_output_path(const std::string& path)
 
 int main(int /*argc*/, char** /*argv*/)
 {
-    pgb::refiner::hcnng::Config cfg;
+    pigr::refiner::hcnng::Config cfg;
 
     cfg.base_path  = resolve_input_path("data/sift-128-euclidean.train.fvecs");
     cfg.query_path = resolve_input_path("data/sift-128-euclidean.test.fvecs");
@@ -67,5 +67,5 @@ int main(int /*argc*/, char** /*argv*/)
     cfg.repeat_max = 1;
     cfg.prune_sample_ratio = 0.2;
 
-    return pgb::refiner::hcnng::run(cfg);
+    return pigr::refiner::hcnng::run(cfg);
 }

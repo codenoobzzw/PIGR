@@ -1,16 +1,16 @@
 #pragma once
-// PGB final refinement runner for HCNNG (header-only).
+// PIGR final refinement runner for HCNNG (header-only).
 // This header only exposes Config + run(). Implementation is in impl/refine_hcnng_impl.hpp.
 //
 // Usage (in your minimal .cpp):
-//   #define PGB_ENABLE_REFINER
+//   #define PIGR_ENABLE_REFINER
 //   #include <graph/hcnng.hpp>
-//   int main() { pgb::refiner::hcnng::Config cfg; ...; return pgb::refiner::hcnng::run(cfg); }
+//   int main() { pigr::refiner::hcnng::Config cfg; ...; return pigr::refiner::hcnng::run(cfg); }
 
 #include <string>
 #include <cstdint>
 
-namespace pgb { namespace refiner { namespace hcnng {
+namespace pigr { namespace refiner { namespace hcnng {
 
 struct Config {
     // Required IO paths
@@ -56,6 +56,6 @@ struct Config {
 
 inline int run(const Config& cfg);
 
-} } } // namespace pgb::refiner::hcnng
+} } } // namespace pigr::refiner::hcnng
 
 #include "impl/refine_hcnng_impl.hpp"

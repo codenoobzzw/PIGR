@@ -1,0 +1,26 @@
+{
+  "title": "PIGR: Post-hoc Iterative Graph Refinement",
+  "upload_type": "software",
+  "description": "Software artifact for PIGR, a post-hoc, trace-driven graph refinement framework for graph-based approximate nearest neighbor search.",
+  "creators": [
+    {
+      "name": "PIGR Authors"
+    }
+  ],
+  "license": "MIT",
+  "keywords": [
+    "approximate nearest neighbor search",
+    "graph indexes",
+    "post-hoc refinement",
+    "PIGR",
+    "KDD 2026"
+  ],
+  "related_identifiers": [
+    {
+      "identifier": "https://github.com/codenoobzzw/PIGR",
+      "relation": "isSupplementTo",
+      "scheme": "url",
+      "resource_type": "software"
+    }
+  ]
+}

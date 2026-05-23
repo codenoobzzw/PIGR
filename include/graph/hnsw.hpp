@@ -468,6 +468,6 @@ namespace anns
 
 };
 
-#ifdef PGB_ENABLE_REFINER
-#include <pgb/refine_hnsw.hpp>
+#ifdef PIGR_ENABLE_REFINER
+#include <pigr/refine_hnsw.hpp>
 #endif

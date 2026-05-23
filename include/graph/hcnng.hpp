@@ -409,6 +409,6 @@ namespace anns
 
 }
 
-#ifdef PGB_ENABLE_REFINER
-#include <pgb/refine_hcnng.hpp>
+#ifdef PIGR_ENABLE_REFINER
+#include <pigr/refine_hcnng.hpp>
 #endif

@@ -1,0 +1,17 @@
+cff-version: 1.2.0
+message: "If you use PIGR, please cite the associated KDD 2026 paper and this software artifact."
+title: "PIGR: Post-hoc Iterative Graph Refinement"
+version: "1.0.0-kdd2026"
+repository-code: "https://github.com/codenoobzzw/PIGR"
+license: MIT
+authors:
+  - name: "PIGR Authors"
+abstract: "Software artifact for PIGR, a post-hoc, trace-driven graph refinement framework for graph-based approximate nearest neighbor search."
+preferred-citation:
+  type: conference-paper
+  title: "Beyond Structure-Driven Tuning: Cost-Aligned Graph Optimization for Approximate Nearest Neighbor Search"
+  authors:
+    - name: "PIGR Authors"
+  year: 2026
+  conference:
+    name: "KDD 2026"

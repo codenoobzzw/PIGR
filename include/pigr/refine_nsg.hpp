@@ -1,16 +1,16 @@
 #pragma once
-// PGB final refinement runner for HNSW (header-only).
-// This header only exposes Config + run(). Implementation is in impl/refine_hnsw_impl.hpp.
+// PIGR final refinement runner for NSG (header-only).
+// This header only exposes Config + run(). Implementation is in impl/refine_nsg_impl.hpp.
 //
 // Usage (in your minimal .cpp):
-//   #define PGB_ENABLE_REFINER
-//   #include <graph/hnsw.hpp>
-//   int main() { pgb::refiner::hnsw::Config cfg; ...; return pgb::refiner::hnsw::run(cfg); }
+//   #define PIGR_ENABLE_REFINER
+//   #include <graph/nsg.hpp>
+//   int main() { pigr::refiner::nsg::Config cfg; ...; return pigr::refiner::nsg::run(cfg); }
 
 #include <string>
 #include <cstdint>
 
-namespace pgb { namespace refiner { namespace hnsw {
+namespace pigr { namespace refiner { namespace nsg {
 
 struct Config {
     // Required IO paths
@@ -20,7 +20,7 @@ struct Config {
     std::string index_path;
 
     // Output / logging
-    std::string log_csv = "out/hnsw_final.csv";
+    std::string log_csv = "out/nsg_final.csv";
 
     // Threads
     int threads = 24;
@@ -52,12 +52,10 @@ struct Config {
     int jump_max = -1;     // <=0 means auto: 2*sqrt(core_k)
     int repeat_max = 1;
     double prune_sample_ratio = 0.7;
-    // HNSW-specific: allowed levels (e.g., 2 => allow levels {0,1})
-    int operation_level_scope = 2;
 };
 
 inline int run(const Config& cfg);
 
-} } } // namespace pgb::refiner::hnsw
+} } } // namespace pigr::refiner::nsg
 
-#include "impl/refine_hnsw_impl.hpp"
+#include "impl/refine_nsg_impl.hpp"

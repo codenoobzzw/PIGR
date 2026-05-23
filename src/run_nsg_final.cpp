@@ -1,5 +1,5 @@
 #include <graph/nsg.hpp>
-#include <pgb/refine_nsg.hpp>
+#include <pigr/refine_nsg.hpp>
 #include <filesystem>
 #include <string>
 
@@ -33,7 +33,7 @@ std::string resolve_output_path(const std::string& path)
 
 int main(int /*argc*/, char** /*argv*/)
 {
-    pgb::refiner::nsg::Config cfg;
+    pigr::refiner::nsg::Config cfg;
 
     cfg.base_path  = resolve_input_path("data/sift-128-euclidean.train.fvecs");
     cfg.query_path = resolve_input_path("data/sift-128-euclidean.test.fvecs");
@@ -67,5 +67,5 @@ int main(int /*argc*/, char** /*argv*/)
     cfg.repeat_max = 1;
     cfg.prune_sample_ratio = 0.2;
 
-    return pgb::refiner::nsg::run(cfg);
+    return pigr::refiner::nsg::run(cfg);
 }

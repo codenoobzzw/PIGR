@@ -12,6 +12,11 @@ out/
 # Local datasets and indices (do not publish large/private files)
 data/
 indices/
+*.idx
+*.fvecs
+*.ivecs
+*.bvecs
+*.hdf5
 
 # Generic editor / OS files
 .vscode/
@@ -33,4 +38,5 @@ venv/
 
 # Optional external dataset archives / temporary downloads
 anns-data/*.gz
+anns-data/data/
 scripts/*.tmp

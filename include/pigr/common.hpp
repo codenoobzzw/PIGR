@@ -1,5 +1,5 @@
 #pragma once
-// Shared utilities for PGB final refiners (header-only).
+// Shared utilities for PIGR final refiners (header-only).
 // Keep this header as "pure utility": no algorithm-specific graph includes.
 
 #include <algorithm>
@@ -32,7 +32,7 @@
 #include <malloc.h> // malloc_trim
 #endif
 
-namespace pgb::common {
+namespace pigr::common {
 
 // ======================== Pseudo Ground Truth ========================
 
@@ -90,7 +90,7 @@ static inline void trim_os_memory_all_threads(int num_threads_hint = 0) {
 
 // ======================== Frontier utils ========================
 
-class PGB9Utils {
+class PIGR9Utils {
 public:
     static float linear_interpolate(float x,
                                     const std::vector<float>& x_values,
@@ -411,4 +411,4 @@ public:
     }
 };
 
-} // namespace pgb::common
+} // namespace pigr::common

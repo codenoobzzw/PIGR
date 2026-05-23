@@ -674,7 +674,7 @@ namespace anns
         return top_candidates;
       }
 
-      std::priority_queue<std::pair<float, int>> build_search_tree_PGB6(
+      std::priority_queue<std::pair<float, int>> build_search_tree_PIGR6(
           const data_t *data_point,
           int mubiao_id,
           size_t ef,
@@ -844,6 +844,6 @@ namespace anns
 
 }
 
-#ifdef PGB_ENABLE_REFINER
-#include <pgb/refine_nsg.hpp>
+#ifdef PIGR_ENABLE_REFINER
+#include <pigr/refine_nsg.hpp>
 #endif

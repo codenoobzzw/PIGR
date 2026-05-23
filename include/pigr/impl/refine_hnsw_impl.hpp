@@ -34,9 +34,9 @@
 #include <omp.h> // OpenMPsupport
 #include <tuple>
 
-#include <pgb/common.hpp>
+#include <pigr/common.hpp>
 
-namespace pgb { namespace refiner { namespace hnsw {
+namespace pigr { namespace refiner { namespace hnsw {
 
 
 using namespace std;
@@ -44,13 +44,13 @@ using namespace anns;
 using namespace anns::utils;
 
 
-using pgb::common::PseudoGroundTruth;
-using pgb::common::PGB9Utils;
-using pgb::common::trim_os_memory_once;
-using pgb::common::trim_os_memory_all_threads;
-using EdgeKey = pgb::common::EdgeKey;
-using EdgeKeyHash = pgb::common::EdgeKeyHash;
-using EdgeSearchTracker = pgb::common::EdgeSearchTracker3D;
+using pigr::common::PseudoGroundTruth;
+using pigr::common::PIGR9Utils;
+using pigr::common::trim_os_memory_once;
+using pigr::common::trim_os_memory_all_threads;
+using EdgeKey = pigr::common::EdgeKey;
+using EdgeKeyHash = pigr::common::EdgeKeyHash;
+using EdgeSearchTracker = pigr::common::EdgeSearchTracker3D;
 using IndexType = graph::HNSW<float, metrics::euclidean>;
 using MultiLevelEdgeStats = std::vector<std::vector<std::vector<std::pair<int, int>>>>;
 
@@ -704,9 +704,9 @@ public:
         }
 
         // 
-        PGB9Utils::sort_pairs(recalls, qps);
-        PGB9Utils::acquire_frontier(recalls, qps);
-        PGB9Utils::sort_pairs(recalls, qps);
+        PIGR9Utils::sort_pairs(recalls, qps);
+        PIGR9Utils::acquire_frontier(recalls, qps);
+        PIGR9Utils::sort_pairs(recalls, qps);
 
         // CSV
         ofstream csv_file(csv_path, ios::app);
@@ -722,7 +722,7 @@ public:
         vector<float> target_recalls = {0.6, 0.7, 0.8, 0.9, 0.92, 0.94, 0.96, 0.97, 0.98, 0.99};
         for (float target_recall : target_recalls)
         {
-            float interpolated_qps = PGB9Utils::linear_interpolate(target_recall, recalls, qps);
+            float interpolated_qps = PIGR9Utils::linear_interpolate(target_recall, recalls, qps);
             csv_file << fixed << setprecision(3) << interpolated_qps << ",";
         }
 
@@ -991,7 +991,7 @@ private:
 public:
     OptimizedEdgePruner(IndexType &idx, int threads = 24) : index(idx), num_threads(threads) {}
 
-    // edge - ( PGB9_clear , )
+    // edge - ( PIGR9_clear , )
     MultiLevelEdgeStats
     build_edge_statistics_optimized(const DataSetWrapper<float> &base, int efq_maintree, int total_batches,
                                     const vector<int> *sampled_indices = nullptr,
@@ -1683,7 +1683,7 @@ public:
         return_k_ = k;
     }
 
-    // Edge insertion - PGB9_clear
+    // Edge insertion - PIGR9_clear
     int process_single_tree_and_add_edges(const float *query_data, int start_id,
                                           int efq_maintree, int jump_max, int repeat_max,
                                           int level)
@@ -1716,7 +1716,7 @@ public:
             return 0;
         }
 
-        // 1. ( PGB9_clear )
+        // 1. ( PIGR9_clear )
         std::priority_queue<std::pair<float, int>> visited;
         std::unordered_set<int> vis;
 
@@ -1729,7 +1729,7 @@ public:
         std::vector<std::pair<int, float>> node_dist_list;
         node_dist_list.emplace_back(start_id, init_dist);
 
-        // 2. - PGB9_clear
+        // 2. - PIGR9_clear
         int search_iterations = 0;
         const int max_search_iterations = efq_maintree * 2;
 
@@ -1793,13 +1793,13 @@ public:
             return 0;
         }
 
-        // 3. Edge insertion - PGB9_clear
+        // 3. Edge insertion - PIGR9_clear
         add_count += process_tree_for_edges(node_dist_list, start_id, jump_max, repeat_max, level);
 
         return add_count;
     }
 
-    // edge - PGB9_clear
+    // edge - PIGR9_clear
     int process_tree_for_edges(const std::vector<std::pair<int, float>> &node_dist_list,
                                int tree_id, int jump_max, int repeat_max, int level)
     {
@@ -1815,7 +1815,7 @@ public:
             return 0;
         }
 
-        // 1. , min k_subadj node - PGB9_clear
+        // 1. , min k_subadj node - PIGR9_clear
         std::vector<std::pair<int, float>> sorted_nodes = node_dist_list;
         std::sort(sorted_nodes.begin(), sorted_nodes.end(),
                   [](const std::pair<int, float> &a, const std::pair<int, float> &b)
@@ -1849,7 +1849,7 @@ public:
         sorted_nodes.swap(filtered_nodes);
         num = static_cast<int>(sorted_nodes.size());
 
-        // 2. node id, id - PGB9_clear
+        // 2. node id, id - PIGR9_clear
         std::vector<int> selected_ids;
         std::unordered_map<int, int> id2idx;
         for (int i = 0; i < sorted_nodes.size(); ++i)
@@ -1892,7 +1892,7 @@ public:
             sorted_nodes[replace_index] = {tree_id, target_dist};
         }
 
-        // 3. A0 - PGB9_clear
+        // 3. A0 - PIGR9_clear
         std::vector<int> A0(static_cast<size_t>(return_k_) * static_cast<size_t>(return_k_), 0);
 
         for (int i = 0; i < selected_ids.size(); ++i)
@@ -1938,7 +1938,7 @@ public:
             }
         }
 
-        // 4. edge - PGB9_clear
+        // 4. edge - PIGR9_clear
         for (int repeat = 0; repeat < repeat_max; repeat++)
         {
             // Am1 = A0^jump_max ( )
@@ -2085,7 +2085,7 @@ public:
         return add_count;
     }
 
-    // Edge insertion - PGB9_clear
+    // Edge insertion - PIGR9_clear
     int add_edges_by_search_tree(const DataSetWrapper<float> &base,
                                  int efq_maintree, int jump_max = 5, int repeat_max = 5, int return_k = 10,
                                  int allowed_levels = 1)
@@ -3065,7 +3065,7 @@ private:
         return base_points;
     }
 
-    // node candidateedge( PGB9_6clear_2 Pruning )
+    // node candidateedge( PIGR9_6clear_2 Pruning )
     vector<EdgeKey> select_candidate_edges_by_existing_metrics(float prune_ratio, int efq_maintree, int total_batches)
     {
         (void)prune_ratio;
@@ -3981,9 +3981,9 @@ public:
     }
 };
 
-// ======================== PGB9_2 ========================
+// ======================== PIGR9_2 ========================
 
-class PGB9_2Algorithm
+class PIGR9_2Algorithm
 {
 private:
     IndexType &index;
@@ -4033,7 +4033,7 @@ private:
         int operation_level_scope = 1;
 
         string base_csv_path = "";
-        string csv_path = "out/performance_PGB9_2clear_sift_optimized.csv";
+        string csv_path = "out/performance_PIGR9_2clear_sift_optimized.csv";
         // QPS kparameters
         int k1 = 1;
         int k2 = 10;
@@ -4042,7 +4042,7 @@ private:
     } params;
 
 public:
-    PGB9_2Algorithm(IndexType &idx,
+    PIGR9_2Algorithm(IndexType &idx,
                     const DataSetWrapper<float> &base_data,
                     const DataSetWrapper<float> &query_data,
                     const GroundTruth &ground_truth,
@@ -4762,12 +4762,12 @@ public:
 
             if (operation_result == 0)
             {
-                printf("\n=== PGB9_2 ===\n");
+                printf("\n=== PIGR9_2 ===\n");
             }
 
             if (total_cut_edges > 100000000)
             {
-                printf("\n=== PGB9_2 ===\n");
+                printf("\n=== PIGR9_2 ===\n");
                 break;
             }
 
@@ -4781,7 +4781,7 @@ public:
         }
 
         const int grand_total_add_edges = total_truth_add_edges + total_tree_add_edges;
-        printf("\n=== PGB9_2 ===\n");
+        printf("\n=== PIGR9_2 ===\n");
         printf("total : removeedge =%d, truth_add=%d, tree_add=%d, totaladd=%d, =%d\n",
                total_cut_edges, total_truth_add_edges, total_tree_add_edges, grand_total_add_edges, switch_count);
     }
@@ -4795,7 +4795,7 @@ inline int run(const Config& cfg)
     // Basic sanity
     if (cfg.base_path.empty() || cfg.query_path.empty() || cfg.gt_path.empty() || cfg.index_path.empty())
     {
-        std::cerr << "[pgb::refiner::hnsw] Missing required paths (base/query/gt/index)." << std::endl;
+        std::cerr << "[pigr::refiner::hnsw] Missing required paths (base/query/gt/index)." << std::endl;
         return 2;
     }
 
@@ -4811,7 +4811,7 @@ inline int run(const Config& cfg)
     // Create tester + algorithm
     Timer timer;
     PerformanceTester tester(index, base, query, gt, timer, cfg.threads);
-    PGB9_2Algorithm algorithm(index, base, query, gt, train_gt, tester, cfg.threads);
+    PIGR9_2Algorithm algorithm(index, base, query, gt, train_gt, tester, cfg.threads);
 
     // Params
     algorithm.set_parameters(cfg.param1, cfg.param2, cfg.param3, cfg.log_csv);
@@ -4835,4 +4835,4 @@ inline int run(const Config& cfg)
 }
 
 
-}}} // namespace pgb::refiner::hnsw
+}}} // namespace pigr::refiner::hnsw

@@ -1,102 +1,134 @@
-# PGB: Post-Refinement for ANN Graph Indices
+# PIGR: Post-hoc Iterative Graph Refinement
 
-This repository contains the refactored implementation of our post-refinement pipeline for Approximate Nearest Neighbor (ANN) graph indices.
-It supports three base graph families:
+## Summary
 
-- HNSW
+PIGR is a post-hoc, trace-driven graph refinement framework for graph-based approximate nearest neighbor search. It refines existing graph indexes using self-query traces and budgeted edge edits without changing the deployed search procedure.
+
+This artifact currently includes runners for these graph families:
+
 - NSG
 - HCNNG
+- HNSW
 
-The codebase is organized for reproducible experiments and paper-style evaluation on SIFT-128.
+## Paper
 
-## 1. Overview
+- Paper title: Beyond Structure-Driven Tuning: Cost-Aligned Graph Optimization for Approximate Nearest Neighbor Search
+- Venue: KDD 2026
+- Paper DOI: TODO: ACM paper DOI after RightsReview
+- Artifact DOI: TODO: Zenodo DOI after GitHub release
 
-The pipeline takes a pre-built ANN graph index and performs post-refinement to improve search quality under controlled runtime overhead.
+## Artifact Scope
 
-Core features:
+This repository contains source code, build instructions, dataset preparation notes, and scripts/documentation for quick sanity checks and paper-style experiments. Large public datasets, generated graph indexes, build products, logs, and full experiment outputs are not committed.
 
-- Unified runner interface for HNSW / NSG / HCNNG
-- Configurable refinement hyper-parameters (e.g., pruning ratio, core-k, efq schedule)
-- Consistent CSV logging for analysis (`out/*.csv`)
-- Standalone tool to build initial indices (`bin/build_indices`)
-
-## 2. Repository Structure
+## Repository Structure
 
 ```text
-pgb_github_refactor_v2/
-├─ CMakeLists.txt
-├─ README.md
-├─ anns-data/                  # bundled dataset conversion utilities
-├─ include/
-│  ├─ graph/                   # base ANN graph structures
-│  └─ pgb/                     # refiner interface + implementation
-├─ src/
-│  ├─ build_indices.cpp
-│  ├─ run_hnsw_final.cpp
-│  ├─ run_nsg_final.cpp
-│  └─ run_hcnng_final.cpp
-├─ data/                       # runtime datasets (generated locally)
-├─ indices/                    # runtime indices (generated locally)
-└─ out/                        # runtime logs (generated locally)
+.
+|-- CMakeLists.txt              # CMake build configuration
+|-- LICENSE                     # MIT License for this repository
+|-- LICENSES.md                 # Third-party code and dependency notes
+|-- CITATION.cff                # Citation metadata
+|-- .zenodo.json                # Zenodo release metadata
+|-- anns-data/                  # Dataset conversion utilities
+|-- docs/
+|   `-- DATA.md                 # Dataset sources and local layout
+|-- include/
+|   |-- graph/                  # Base ANN graph implementations
+|   |-- ivf/                    # IVF helper code
+|   |-- pigr/                   # PIGR refiner interfaces and implementations
+|   |-- statistic/              # Evaluation helpers
+|   `-- utils/                  # Binary IO, recall, timer, and utility helpers
+|-- paper/
+|   `-- README.md               # Notes for an optional extended report
+|-- reproduce/
+|   `-- README.md               # Reproduction workflow notes
+|-- scripts/
+|   |-- build.sh                # Release build helper
+|   |-- prepare_sift.sh         # SIFT1M preparation wrapper
+|   `-- run_sanity.sh           # Local sanity runner
+`-- src/
+    |-- build_indices.cpp       # Builds default base graph indexes
+    |-- run_hcnng_final.cpp     # HCNNG PIGR runner
+    |-- run_hnsw_final.cpp      # HNSW PIGR runner
+    `-- run_nsg_final.cpp       # NSG PIGR runner
 ```
 
-## 3. Requirements
+Runtime directories such as `data/`, `indices/`, `bin/`, `build/`, and `out/` are created locally and ignored by Git.
+
+## Requirements
 
 - Linux
 - CMake >= 3.16
-- C++17 compiler (GCC/Clang)
+- C++17 compiler, such as GCC or Clang
 - OpenMP
-- Python 3.8+ (for dataset conversion)
-- Python packages: `numpy`, `h5py`
+- Python 3.8+
+- Python packages for dataset preparation, including `numpy` and `h5py`
 
-Install Python dependencies:
+Install Python dependencies as needed:
 
 ```bash
 python3 -m pip install numpy h5py
 ```
 
-## 4. Build
+## Build
 
-From repository root:
+From the repository root:
 
 ```bash
 cmake -S . -B build -DCMAKE_BUILD_TYPE=Release
 cmake --build build -j
 ```
 
-Generated executables (in `bin/`):
+Or use the helper script:
 
-- `run_hnsw_final`
-- `run_nsg_final`
-- `run_hcnng_final`
-- `build_indices`
+```bash
+./scripts/build.sh
+```
 
-## 5. Dataset Preparation (SIFT-128)
+Generated executables are written to `bin/`:
 
-Use bundled `anns-data` tools:
+- `bin/build_indices`
+- `bin/run_hcnng_final`
+- `bin/run_hnsw_final`
+- `bin/run_nsg_final`
+
+## Dataset Preparation
+
+The default checked-in runners expect SIFT1M-style files in vecs format:
+
+```text
+data/sift-128-euclidean.train.fvecs
+data/sift-128-euclidean.test.fvecs
+data/sift-128-euclidean.gt.ivecs
+```
+
+The bundled `anns-data` tooling can prepare the SIFT dataset:
+
+```bash
+./scripts/prepare_sift.sh
+```
+
+This wraps:
 
 ```bash
 cd anns-data
 python3 create_dataset.py --dataset sift-128-euclidean
-cd ..
 ```
 
-Copy generated files to runtime data directory:
+and copies the generated vecs files into the repository-level `data/` directory.
+
+The paper evaluates SIFT1M, DEEP1M, DBPEDIA1M, MNIST, and AUDIO. This repository includes helper tooling for SIFT-style preparation and additional dataset download/conversion utilities under `anns-data/`, but external datasets must be downloaded according to their own licenses and terms. See `docs/DATA.md` for expected file names and layout.
+
+## Quick Sanity Test
+
+Build the code first:
 
 ```bash
-mkdir -p data
-cp anns-data/sift-128-euclidean.train.fvecs data/
-cp anns-data/sift-128-euclidean.test.fvecs data/
-cp anns-data/sift-128-euclidean.gt.ivecs data/
+./scripts/build.sh
 ```
 
-Expected files:
-
-- `data/sift-128-euclidean.train.fvecs`
-- `data/sift-128-euclidean.test.fvecs`
-- `data/sift-128-euclidean.gt.ivecs`
-
-## 6. Build Base Indices
+Prepare SIFT data or place compatible vecs files under `data/`, then build the default indexes:
 
 ```bash
 ./bin/build_indices \
@@ -108,44 +140,50 @@ Expected files:
   --hcnng-s 7 --hcnng-t 15 --hcnng-ls 1250
 ```
 
-Default outputs:
-
-- `indices/sift-128-euclidean/hnsw/M_16_efc_96.idx`
-- `indices/sift-128-euclidean/nsg/R_64_efc_256.idx`
-- `indices/sift-128-euclidean/hcnng/s_7_T_15_Ls_1250.idx`
-
-## 7. Run Post-Refinement
-
-Run from repository root:
+Run the sanity script:
 
 ```bash
-./bin/run_hnsw_final
-./bin/run_nsg_final
-./bin/run_hcnng_final
+./scripts/run_sanity.sh
 ```
 
-CSV logs are written to:
+The script checks required binaries, data files, and indexes. If data or indexes are missing, it exits with a clear error and points to `docs/DATA.md`. By default it runs the HNSW sanity path and writes CSV output under `out/`, such as `out/hnsw_final.csv`.
 
-- `out/hnsw_final.csv`
-- `out/nsg_final.csv`
-- `out/hcnng_final.csv`
+To run multiple default runners:
 
-## 8. Reproducibility Notes
+```bash
+PIGR_SANITY_RUNNERS="hnsw nsg hcnng" ./scripts/run_sanity.sh
+```
 
-- Keep dataset, index parameters, and thread settings fixed for fair comparison.
-- Current default runner settings target SIFT-128.
-- Key runtime paths and knobs can be adjusted in:
-  - `src/run_hnsw_final.cpp`
-  - `src/run_nsg_final.cpp`
-  - `src/run_hcnng_final.cpp`
+## Reproducing Paper-Style Experiments
 
-## 9. Common Issues
+The default runner entry points are:
 
-1. `Error opening file: data/...`
-   - Run binaries from repository root, or update path settings in runner files.
+- HNSW: `bin/run_hnsw_final`
+- NSG: `bin/run_nsg_final`
+- HCNNG: `bin/run_hcnng_final`
 
-2. OpenMP not found during CMake configure
-   - Install OpenMP toolchain and rerun CMake configure.
+Each runner configures dataset paths, index paths, logging paths, and PIGR refinement knobs in the corresponding `src/run_*_final.cpp` file. Full 1M-scale experiments may take substantial time and CPU resources. Keep dataset versions, index construction parameters, thread counts, and runner configurations fixed when comparing results.
 
-3. Output CSV not found
-   - Check `cfg.log_csv` path in the corresponding runner and ensure `out/` is writable.
+See `reproduce/README.md` for quick, SIFT-based, and full paper-style workflows.
+
+## Extended Technical Report
+
+An optional extended technical report PDF may be placed at:
+
+```text
+paper/PIGR_extended_technical_report.pdf
+```
+
+No extended report PDF is currently included.
+
+## Citation
+
+Please cite the associated KDD 2026 paper and this software artifact. Citation metadata is provided in `CITATION.cff`.
+
+## License
+
+This repository is released under the MIT License. See `LICENSE` and `LICENSES.md`.
+
+## Contact
+
+For questions, please open a GitHub issue or contact the paper authors.

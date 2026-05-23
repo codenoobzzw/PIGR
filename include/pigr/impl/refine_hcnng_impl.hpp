@@ -1,5 +1,6 @@
 
-#include <graph/nsg.hpp>
+
+#include <graph/hcnng.hpp>
 #include <iostream>
 #include <fstream>
 #include <utility>
@@ -33,9 +34,9 @@
 #include <mutex> // for fine-grained locks
 #include <omp.h> // OpenMPsupport
 
-#include <pgb/common.hpp>
+#include <pigr/common.hpp>
 
-namespace pgb { namespace refiner { namespace nsg {
+namespace pigr { namespace refiner { namespace hcnng {
 
 
 using namespace std;
@@ -43,11 +44,15 @@ using namespace anns;
 using namespace anns::utils;
 
 
-using pgb::common::PseudoGroundTruth;
-using pgb::common::PGB9Utils;
-using pgb::common::trim_os_memory_once;
-using pgb::common::trim_os_memory_all_threads;
-using EdgeSearchTracker = pgb::common::EdgeSearchTracker2D;
+using pigr::common::PseudoGroundTruth;
+using pigr::common::PIGR9Utils;
+using pigr::common::trim_os_memory_once;
+using pigr::common::trim_os_memory_all_threads;
+using EdgeSearchTracker = pigr::common::EdgeSearchTracker2D;
+using GraphType = graph::HCNNG<float, metrics::euclidean>;
+
+#define neighbors_ adj_memory_
+
 // edge - for edge
 
 // edge - for edge
@@ -72,11 +77,14 @@ struct EdgeKeyHash {
 // - edge
 class TrackedSearchExecutor {
 private:
-    graph::NSG<float, metrics::euclidean>& index;
+    GraphType& index;
     EdgeSearchTracker& tracker;
+    int pick_entry_point(int fallback_node) const {
+        return rand() % index.base_.num_;
+    }
     
 public:
-    TrackedSearchExecutor(graph::NSG<float, metrics::euclidean>& idx, EdgeSearchTracker& track) 
+    TrackedSearchExecutor(GraphType& idx, EdgeSearchTracker& track) 
         : index(idx), tracker(track) {}
     
     // - NSG Branch and Bound ( )
@@ -89,11 +97,16 @@ public:
         std::vector<bool> mass_visited(index.base_.num_, false);
         size_t comparison = 0;
 
-        float init_dist = metrics::euclidean(index.base_[query_point_index], index.base_[index.enterpoint_node_], index.base_.dim_);
+        const int entry = pick_entry_point(base_point_index);
+        if (entry < 0 || entry >= index.base_.num_) {
+            return 0;
+        }
+
+        float init_dist = metrics::euclidean(index.base_[query_point_index], index.base_[entry], index.base_.dim_);
         comparison++;
-        top_candidates.emplace(init_dist, index.enterpoint_node_); // max heap
-        candidate_set.emplace(-init_dist, index.enterpoint_node_); // min heap
-        mass_visited[index.enterpoint_node_] = true;
+        top_candidates.emplace(init_dist, entry); // max heap
+        candidate_set.emplace(-init_dist, entry); // min heap
+        mass_visited[entry] = true;
 
         // ( Pruning )
         long long local_adopted = 0;
@@ -158,11 +171,16 @@ public:
         std::vector<bool> mass_visited(index.base_.num_, false);
         size_t comparison = 0;
 
-        float init_dist = metrics::euclidean(query_data, index.base_[index.enterpoint_node_], index.base_.dim_);
+    const int entry = pick_entry_point(base_point_index);
+        if (entry < 0 || entry >= index.base_.num_) {
+            return 0;
+        }
+
+        float init_dist = metrics::euclidean(query_data, index.base_[entry], index.base_.dim_);
         comparison++;
-        top_candidates.emplace(init_dist, index.enterpoint_node_); // max heap
-        candidate_set.emplace(-init_dist, index.enterpoint_node_); // min heap
-        mass_visited[index.enterpoint_node_] = true;
+        top_candidates.emplace(init_dist, entry); // max heap
+        candidate_set.emplace(-init_dist, entry); // min heap
+        mass_visited[entry] = true;
 
         /// @brief Branch and Bound Algorithm
         float low_bound = init_dist;
@@ -226,10 +244,10 @@ public:
         std::fill(visited_buffer.begin(), visited_buffer.end(), 0);
 
         size_t comparison = 0;
-        const int num = index.base_.num_;
-        const int dim = index.base_.dim_;
-        const int enter = index.enterpoint_node_;
-        if (enter < 0 || enter >= num) return 0;
+    const int num = index.base_.num_;
+    const int dim = index.base_.dim_;
+    const int enter = pick_entry_point(base_point_index);
+    if (enter < 0 || enter >= num) return 0;
 
         float init_dist = metrics::euclidean(query_data, index.base_[enter], dim);
         comparison++;
@@ -296,10 +314,10 @@ public:
         std::fill(visited_buffer.begin(), visited_buffer.end(), 0);
 
         size_t comparison = 0;
-        const int num = index.base_.num_;
-        const int dim = index.base_.dim_;
-        const int enter = index.enterpoint_node_;
-        if (enter < 0 || enter >= num) return 0;
+    const int num = index.base_.num_;
+    const int dim = index.base_.dim_;
+    const int enter = pick_entry_point(base_point_index);
+    if (enter < 0 || enter >= num) return 0;
 
         float init_dist = metrics::euclidean(query_data, index.base_[enter], dim);
         comparison++;
@@ -359,15 +377,15 @@ public:
 
 class PerformanceTester {
 private:
-    graph::NSG<float, metrics::euclidean>& index;
+    GraphType& index;
     const DataSetWrapper<float>& base;
     const DataSetWrapper<float>& query;
     const GroundTruth& gt;
     Timer& timer;
     int num_threads = 24;
-    
+
 public:
-    PerformanceTester(graph::NSG<float, metrics::euclidean>& idx, 
+    PerformanceTester(GraphType& idx, 
                      const DataSetWrapper<float>& b,
                      const DataSetWrapper<float>& q, 
                      const GroundTruth& ground_truth,
@@ -375,126 +393,16 @@ public:
         : index(idx), base(b), query(q), gt(ground_truth), timer(t), num_threads(threads) {}
 
     // CSV
-    int find_optimal_efq_for_target_recall_tester(graph::NSG<float, metrics::euclidean>& index,
-                                          const DataSetWrapper<float>& dataset,
-                                          const GroundTruth& gt,
-                                          int k,
-                                          double target_recall,
-                                          int efq_start = 5,
-                                          int coarse_step = 20,
-                                          int refine_step = 2,
-                                          int efq_max = 2000,
-                                          float* achieved_recall = nullptr,
-                                          float* achieved_qps = nullptr) {
-        const float target = static_cast<float>(target_recall);
-        Timer timer;
-        index.set_num_threads(24);
-
-        printf(" efq (k=%d, targetrecall=%.4f)...\n", k, target);
-
-        int optimal_efq = -1;
-        float optimal_recall = 0.0f;
-        float optimal_qps = 0.0f;
-        float last_recall = 0.0f;
-        float last_qps = 0.0f;
-
-        int lower_efq = -1;
-        float lower_recall = 0.0f;
-        float lower_qps = 0.0f;
-        int upper_efq = -1;
-        float upper_recall = 0.0f;
-        float upper_qps = 0.0f;
-
-        for (int efq = efq_start; efq <= efq_max; efq += coarse_step) {
-            index.get_comparison_and_clear();
-            timer.start();
-            auto [_, knn] = index.search(dataset, k, efq);
-            timer.stop();
-
-            float recall = gt.recall(k, knn);
-            float qps_val = dataset.num_ / timer.get();
-            timer.reset();
-
-            last_recall = recall;
-            last_qps = qps_val;
-
-            if (recall >= target) {
-                upper_efq = efq;
-                upper_recall = recall;
-                upper_qps = qps_val;
-                if (lower_efq == -1) {
-                    lower_efq = efq - coarse_step;
-                    if (lower_efq < efq_start) lower_efq = efq_start;
-                }
-                break;
-            } else {
-                lower_efq = efq;
-                lower_recall = recall;
-                lower_qps = qps_val;
-            }
-        }
-
-        if (upper_efq == -1) {
-            optimal_efq = efq_max;
-            optimal_recall = last_recall;
-            optimal_qps = last_qps;
-            printf("edge %zu: =%d, =%d, =%zu",
-                   optimal_efq, last_recall, last_qps);
-        } else {
-            if (lower_efq < efq_start) {
-                lower_efq = efq_start;
-            }
-            int refined_upper = upper_efq;
-            float refined_recall = upper_recall;
-            float refined_qps = upper_qps;
-            
-            for (int efq = lower_efq + refine_step; efq < upper_efq; efq += refine_step) {
-                index.get_comparison_and_clear();
-                timer.start();
-                auto [_, knn] = index.search(dataset, k, efq);
-                timer.stop();
-
-                float recall = gt.recall(k, knn);
-                float qps_val = dataset.num_ / timer.get();
-                timer.reset();
-
-                if (recall >= target) {
-                    refined_upper = efq;
-                    refined_recall = recall;
-                    refined_qps = qps_val;
-                    break;
-                } else {
-                    lower_efq = efq;
-                    lower_recall = recall;
-                    lower_qps = qps_val;
-                }
-            }
-
-            optimal_efq = refined_upper;
-            optimal_recall = refined_recall;
-            optimal_qps = refined_qps;
-            printf("edge %zu: =%d, =%d, =%zu",
-                   optimal_efq, optimal_recall, optimal_qps, lower_efq, refined_upper);
-        }
-
-        if (achieved_recall) {
-            *achieved_recall = optimal_recall;
-        }
-        if (achieved_qps) {
-            *achieved_qps = optimal_qps;
-        }
-
-        return optimal_efq;
-    }
-
-void test_and_record(const string& csv_path, int R, int efc, int iter, int k, 
-                        int truth_added_edges, int tree_added_edges, int cut_edges, int efq_max = 500, int efq_step = 10, double acer_value = -1.0f,double comparison_pers = -1,double opt_time = 0.0) {
+    void test_and_record(const string& csv_path, int T, int Ls, int s, int iter, int k, 
+                        int truth_added_edges, int tree_added_edges, int cut_edges,
+                        double avg_comps, double aecr, double opt_time,
+                        int efq_max = 500, int efq_step = 10) {
         vector<float> recalls, qps;
         
         index.set_num_threads(num_threads);
         
         // efq
-        for (int efq = 5; efq <= efq_max; efq += efq_step) {
+    for (int efq = 5; efq <= efq_max; efq += efq_step) {
             index.get_comparison_and_clear();
             timer.start();
             auto [_, knn] = index.search(query, k, efq);
@@ -509,9 +417,9 @@ void test_and_record(const string& csv_path, int R, int efc, int iter, int k,
         }
 
         // 
-        PGB9Utils::sort_pairs(recalls, qps);
-        PGB9Utils::acquire_frontier(recalls, qps);
-        PGB9Utils::sort_pairs(recalls, qps);
+        PIGR9Utils::sort_pairs(recalls, qps);
+        PIGR9Utils::acquire_frontier(recalls, qps);
+        PIGR9Utils::sort_pairs(recalls, qps);
 
         // CSV
         ofstream csv_file(csv_path, ios::app);
@@ -520,23 +428,25 @@ void test_and_record(const string& csv_path, int R, int efc, int iter, int k,
             return;
         }
 
-        csv_file << R << "," << efc << "," << iter << "," << k << "," 
-                 << truth_added_edges << "," << tree_added_edges << "," << cut_edges << ",";
+    csv_file << T << "," << Ls << "," << s << "," << iter << "," << k << ","
+         << truth_added_edges << "," << tree_added_edges << "," << cut_edges << ",";
 
         vector<float> target_recalls = {0.6, 0.7, 0.8, 0.9, 0.92, 0.94, 0.96, 0.97, 0.98, 0.99};
         for (float target_recall : target_recalls) {
-            float interpolated_qps = PGB9Utils::linear_interpolate(target_recall, recalls, qps);
+            float interpolated_qps = PIGR9Utils::linear_interpolate(target_recall, recalls, qps);
             csv_file << fixed << setprecision(3) << interpolated_qps << ",";
         }
         
-        // distance evaluations ACER
-
-        csv_file << comparison_pers << "," << fixed << setprecision(4) << acer_value << "," << fixed << setprecision(2)<< opt_time << endl;
+        // avgdistance evaluations, acer
+        csv_file << fixed << setprecision(2) << avg_comps << ","
+                 << fixed << setprecision(6) << aecr << ","
+                 << fixed << setprecision(2) << opt_time << endl;
         csv_file.close();
 
         // 
-        printf(" range target efq, max%d (recall=%.4f, qps=%.1f)\n", 
-               iter, k, truth_added_edges + tree_added_edges, cut_edges, 
+     const int total_added = truth_added_edges + tree_added_edges;
+     printf("edge %zu: =%d, =%d, =%zu",
+         iter, k, truth_added_edges, tree_added_edges, total_added, cut_edges, 
                recalls.empty() ? 0.0f : recalls.front(), 
                recalls.empty() ? 0.0f : recalls.back(),
                qps.empty() ? 0.0f : qps.front(), 
@@ -551,7 +461,7 @@ void test_and_record(const string& csv_path, int R, int efc, int iter, int k,
             return;
         }
         
-    csv_file << "R,efc,iter,k,truth_add,tree_add,cuteedge,";
+    csv_file << "T,Ls,s,iter,k,truth_add,tree_add,cuteedge,";
         csv_file << "qps(recall=0.6),qps(recall=0.7),qps(recall=0.8),qps(recall=0.9),";
         csv_file << "qps(recall=0.92),qps(recall=0.94),qps(recall=0.96),qps(recall=0.97),";
         csv_file << "qps(recall=0.98),qps(recall=0.99),comp_pers,aecr,opt_time" << endl;
@@ -560,202 +470,174 @@ void test_and_record(const string& csv_path, int R, int efc, int iter, int k,
         printf("CSV initialized: %s\n", csv_path.c_str());
     }
     
-    // totaldistance evaluations( )
-    // efq : recall >= 0.99 efq , totaldistance evaluations
-    pair<double, double> calculate_total_comparisons(int k) {
-        printf(" totaldistance evaluations, efq (k=%d)...\n", k);
-        
-        // 
-    printf(" Step 1: efq ( recall >= 0.99 efq )\n");
-        
-        // 
-        int optimal_efq = -1;
-        vector<float> recalls, qps_values;
-        Timer timer;
-        index.set_num_threads(24);
-        
-    printf(" Step 1: efq ( recall >= 0.99 efq )\n");
-        
-        // 
-        float optimal_recall = 0.0f;
-        float optimal_qps = 0.0f;
-        float last_recall = 0.0f;
-        float last_qps = 0.0f;
+    // totaldistance evaluations, avgdistance evaluations ACER
+    tuple<double, double> calculate_total_comparisons(int k) {
+        if (k <= 0) {
+            printf("=== edge ===\n");
+            k = 1;
+        }
 
-        for (int efq = 5; efq <= 2000; efq += 400) {
-            printf(" efq=%d...\n", efq);
+        printf(" totaldistance evaluations (k=%d)...\n", k);
+
+        int efq_99 = -1;
+        float recall_99 = 0.0f;
+        Timer scan_timer;
+        index.set_num_threads(num_threads);
+
+        for (int efq = 5; efq <= 2000; efq += 30) {
             index.get_comparison_and_clear();
-            timer.start();
-            auto [_, knn] = index.search(query, k, efq);
-            timer.stop();
+            scan_timer.start();
+            auto search_res = index.search(query, k, efq);
+            scan_timer.stop();
+            const auto& knn = search_res.second;
             float recall = gt.recall(k, knn);
-            float qps_val = query.num_ / timer.get();
-            recalls.push_back(recall);
-            qps_values.push_back(qps_val);
-            timer.reset();
-            last_recall = recall;
-            last_qps = qps_val;
-            // recall >= 0.99 efq
-            if (recall >= 0.99f && optimal_efq == -1) {
-                optimal_efq = efq;
-                optimal_recall = recall;
-                optimal_qps = qps_val;
+            scan_timer.reset();
+
+            if (recall >= 0.99f) {
+                efq_99 = efq;
+                recall_99 = recall;
                 break;
             }
         }
-        
-        if (optimal_efq == -1) {
-            optimal_efq = 2000;
-            printf(" range target efq, max%d (recall=%.4f, qps=%.1f)\n",
-                   optimal_efq, last_recall, last_qps);
+
+        if (efq_99 == -1) {
+            efq_99 = 2000;
+            printf(" recall>=0.99 efq, max %d\n", efq_99);
         } else {
-            printf(" range target efq, max%d (recall=%.4f, qps=%.1f)\n",
-                   optimal_efq, optimal_recall, optimal_qps);
+            printf(" recall>=0.99 efq: %d (recall=%.4f)\n", efq_99, recall_99);
         }
-        
-        // 2. efq totaldistance evaluations
-        printf(" Step 2: compute total distance evaluations on query samples with efq=%d\n", optimal_efq);
-        
-        // , 0
-        vector<long long> thread_local_comparisons(24, 0LL);
-        vector<int> thread_valid_samples(24, 0);
-        vector<double> thread_local_acer(24, 0.0);
-        
-        printf(" %d , 24 , 0 \n", query.num_);
-        
-        #pragma omp parallel for num_threads(24) schedule(dynamic, 1000)
-        for (int query_idx = 0; query_idx < query.num_; query_idx++) {
+
+        const int effective_threads = num_threads > 0 ? num_threads : 1;
+        vector<long long> thread_total_attempts(effective_threads, 0LL);
+        vector<int> thread_sample_counts(effective_threads, 0);
+        vector<double> thread_acer_accum(effective_threads, 0.0);
+
+        auto pick_entry_point = [&](int seed) -> int {
+            const int total_nodes = static_cast<int>(index.base_.num_);
+            if (total_nodes == 0) {
+                return -1;
+            }
+
+            const int neighbor_size = static_cast<int>(index.neighbors_.size());
+            int candidate = seed % total_nodes;
+            if (candidate < 0) {
+                candidate += total_nodes;
+            }
+
+            for (int offset = 0; offset < total_nodes; ++offset) {
+                int idx = (candidate + offset) % total_nodes;
+                if (idx < neighbor_size && !index.neighbors_[idx].empty()) {
+                    return idx;
+                }
+            }
+            return candidate % total_nodes;
+        };
+
+        int search_efq = std::max(1, efq_99);
+
+        #pragma omp parallel for num_threads(effective_threads) schedule(dynamic, 256)
+        for (int query_idx = 0; query_idx < static_cast<int>(query.num_); ++query_idx) {
             int tid = omp_get_thread_num();
-            
-            // 
             const float* query_vec = query[query_idx];
-            
-            // NSG Branch and Bound
+
+            std::vector<bool> mass_visited(index.base_.num_, false);
             std::priority_queue<std::pair<float, int>> top_candidates;
             std::priority_queue<std::pair<float, int>> candidate_set;
-            std::vector<bool> mass_visited(index.base_.num_, false);
             size_t comparison = 0;
-
-            float init_dist = metrics::euclidean(query_vec, index.base_[index.enterpoint_node_], index.base_.dim_);
+            int ep = rand() % static_cast<int>(index.base_.num_);
+            float dist = metrics::euclidean(query_vec, index.base_[ep], index.base_.dim_);
             comparison++;
-            top_candidates.emplace(init_dist, index.enterpoint_node_); // max heap
-            candidate_set.emplace(-init_dist, index.enterpoint_node_); // min heap
-            mass_visited[index.enterpoint_node_] = true;
-
-            // ( Pruning )
-            long long local_adopted = 0;
-            long long local_comparisons = 0;
-
+            top_candidates.emplace(dist, ep); // max heap
+            candidate_set.emplace(-dist, ep); // min heap
+            mass_visited[ep] = true;
             /// @brief Branch and Bound Algorithm
-            float low_bound = init_dist;
+            float low_bound = dist;
+            long long local_adopted = 0;
             while (candidate_set.size())
             {
               auto curr_el_pair = candidate_set.top();
-              if (-curr_el_pair.first > low_bound && top_candidates.size() == optimal_efq)
+              if (-curr_el_pair.first > low_bound && top_candidates.size() == static_cast<size_t>(search_efq))
                 break;
               candidate_set.pop();
               int curr_node_id = curr_el_pair.second;
-              
-              if (curr_node_id < 0 || curr_node_id >= index.base_.num_ || 
-                  curr_node_id >= index.neighbors_.size() || index.neighbors_[curr_node_id].empty()) {
-                continue;
-              }
-              
-              // node
-              for (int neighbor_id : index.neighbors_[curr_node_id]) {
-                if (neighbor_id < 0 || neighbor_id >= index.base_.num_) continue;
-                
+              std::unique_lock<std::mutex> lock(*index.link_list_locks_[curr_node_id]);
+              const auto &neighbors = index.neighbors_[curr_node_id];
+              for (int neighbor_id : neighbors)
+              {
                 if (!mass_visited[neighbor_id])
                 {
                   mass_visited[neighbor_id] = true;
                   float dd = metrics::euclidean(query_vec, index.base_[neighbor_id], index.base_.dim_);
                   comparison++;
-                  local_comparisons++;
-                  
                   /// @brief If neighbor is closer than farest vector in top result, and result.size still less than ef
-                  if (top_candidates.top().first > dd || top_candidates.size() < optimal_efq)
+                  if (top_candidates.top().first > dd || top_candidates.size() < static_cast<size_t>(search_efq))
                   {
                     candidate_set.emplace(-dd, neighbor_id);
                     top_candidates.emplace(dd, neighbor_id);
-                    if (top_candidates.size() > optimal_efq) // give up farest result so far
+                    if (top_candidates.size() > static_cast<size_t>(search_efq)) // give up farest result so far
                       top_candidates.pop();
                     if (top_candidates.size())
                       low_bound = top_candidates.top().first;
-                    
                     local_adopted++;
                   }
-                  // 
                 }
               }
             }
-            
-            // distance evaluations
-            long long local_discarded = local_comparisons - local_adopted;
-            long long total_attempts = local_adopted + local_discarded;
-            
+            while (top_candidates.size() > static_cast<size_t>(k))
+            {
+              top_candidates.pop();
+            }
+
+            const long long total_attempts = static_cast<long long>(comparison);
             if (total_attempts > 0) {
-                // ACER: adopted / (distance evaluations)
-                double local_acer_contribution = static_cast<double>(local_adopted) / (total_attempts);
-                
-                // distance evaluations
-                thread_local_comparisons[tid] += total_attempts;
-                thread_valid_samples[tid]++;
-                thread_local_acer[tid] += local_acer_contribution;
+                double local_acer = static_cast<double>(local_adopted) /
+                                    (static_cast<double>(total_attempts) * static_cast<double>(total_attempts));
+                thread_total_attempts[tid] += total_attempts;
+                thread_sample_counts[tid] += 1;
+                thread_acer_accum[tid] += local_acer;
             }
         }
-        
-        // 
+
         long long total_comparisons = 0LL;
         int valid_samples = 0;
         double total_acer = 0.0;
-        
-        for (int tid = 0; tid < 24; tid++) {
-            total_comparisons += thread_local_comparisons[tid];
-            valid_samples += thread_valid_samples[tid];
-            total_acer += thread_local_acer[tid];
+
+        for (int tid = 0; tid < effective_threads; ++tid) {
+            total_comparisons += thread_total_attempts[tid];
+            valid_samples += thread_sample_counts[tid];
+            total_acer += thread_acer_accum[tid];
         }
-        
-        // 3. avgdistance evaluations
-        double avg_comparisons = 0;
-        if (valid_samples > 0) {
-            avg_comparisons = total_comparisons / valid_samples;
-            
-            printf(" Step 1: efq ( recall >= 0.99 efq )\n");
-            printf(" Step 2: compute total distance evaluations on query samples with efq=%d\n", optimal_efq);
-            printf(" total : %d ( %d)\n", query.num_, valid_samples);
-            printf(" avgdistance evaluations: %lf\n", avg_comparisons);
-            printf("  ACER (Approximate Candidate Evaluation Ratio): %.6f\n", total_acer / valid_samples);
-            
-            // 4. efq k totaldistance evaluations
-            printf(" Step 4: efq=%d k=%d \n", optimal_efq, k);
-            
-            // 
-            index.get_comparison_and_clear();
-            
-            // k
-            Timer test_timer;
-            test_timer.start();
-            auto [_, knn] = index.search(query, k, optimal_efq);
-            test_timer.stop();
-            
-            // totaldistance evaluations
-            long long total_comparisons_k = index.get_comparison_and_clear();
-            float recall = gt.recall(k, knn);
-            float qps = query.num_ / test_timer.get();
-            
-            printf("k=%d (efq=%d):\n", k, optimal_efq);
-            printf("  recall@%d: %.4f\n", k, recall);
-            printf("  QPS: %.1f\n", qps);
-            printf(" totaldistance evaluations: %lld\n", total_comparisons_k);
-        } else {
-            printf(" Step 1: efq ( recall >= 0.99 efq )\n");
-            return {0LL, 0.0};
+
+        if (valid_samples <= 0) {
+            printf("Warning: k<=0, 1\n");
+            return make_tuple(0.0, 0.0);
         }
-        
-        return {avg_comparisons, total_acer / valid_samples};
+
+        double avg_comparisons = static_cast<double>(total_comparisons) / static_cast<double>(valid_samples);
+
+        printf("Warning: k<=0, 1\n");
+        printf(" recall>=0.99 efq, max %d\n", efq_99);
+        printf(" total : %zu ( %d)\n", query.num_, valid_samples);
+        printf(" avgdistance evaluations: %.2f\n", avg_comparisons);
+        printf("  ACER (Approximate Candidate Evaluation Ratio): %.6f\n", total_acer);
+
+        index.get_comparison_and_clear();
+        Timer test_timer;
+        test_timer.start();
+        auto eval_res = index.search(query, k, efq_99);
+        test_timer.stop();
+        const auto& eval_knn = eval_res.second;
+    long long total_comparisons_k = static_cast<long long>(index.get_comparison_and_clear());
+    float recall_eval = gt.recall(k, eval_knn);
+    double qps = static_cast<double>(query.num_) / test_timer.get();
+
+        printf("k=%d (efq=%d):\n", k, efq_99);
+        printf("  recall@%d: %.4f\n", k, recall_eval);
+        printf("  QPS: %.1f\n", qps);
+        printf(" totaldistance evaluations: %lld\n", total_comparisons_k);
+
+        return make_tuple(avg_comparisons, total_acer);
     }
-
-
 };
 
 
@@ -763,35 +645,38 @@ void test_and_record(const string& csv_path, int R, int efc, int iter, int k,
 
 class OptimizedEdgePruner {
 private:
-    graph::NSG<float, metrics::euclidean>& index;
+    GraphType& index;
     int num_threads = 24;
-    
+
 public:
-    OptimizedEdgePruner(graph::NSG<float, metrics::euclidean>& idx, int threads = 24) : index(idx), num_threads(threads) {}
+    OptimizedEdgePruner(GraphType& idx, int threads = 24) : index(idx), num_threads(threads) {}
     
-    // edge - ( PGB9_clear , )
+    // edge - ( PIGR9_clear , )
     vector<vector<pair<int, int>>>
     build_edge_statistics_optimized(const DataSetWrapper<float>& base, int efq_maintree, int total_batches,
                                     const vector<int>* sampled_indices = nullptr) {
-        printf(" Step 1: efq ( recall >= 0.99 efq )\n");
+        printf("Warning: k<=0, 1\n");
         Timer t;
         t.start();
-        
+
         const vector<int>* indices = sampled_indices;
         const int total_points = indices ? static_cast<int>(indices->size()) : static_cast<int>(base.num_);
         if (total_points <= 0) {
-            printf(" Step 1: efq ( recall >= 0.99 efq )\n");
+            printf("Warning: k<=0, 1\n");
             return vector<vector<pair<int, int>>>(base.num_);
         }
 
-        printf("iter=%d, k=%d, added=%d, cut=%d, recallrange: %.3f-%.3f, qpsrange: %.1f-%.1f\n",
-               base.num_, total_points, base.num_ > 0 ? (100.0 * total_points / base.num_) : 0.0);
+        const double sample_ratio_pct = (base.num_ > 0)
+            ? (100.0 * static_cast<double>(total_points) / static_cast<double>(base.num_))
+            : 0.0;
+        printf("iter=%d, k=%d, truth_add=%d, tree_add=%d, total_add=%d, cut=%d, recallrange: %.3f-%.3f, qpsrange: %.1f-%.1f\n",
+               base.num_, total_points, sample_ratio_pct);
         
         // edge_stats_sparse[node_id][neighbor_id] = {adopted, discarded}
         // edge_stats_sparse[node_id][neighbor_id] = {adopted, discarded}
         unordered_map<int, unordered_map<int, pair<int, int>>> edge_stats_sparse;
         
-        printf(" Step 1: efq ( recall >= 0.99 efq )\n");
+        printf("Warning: k<=0, 1\n");
         
         // total parameters
         const int batch_size = max(1, (total_points + total_batches - 1) / total_batches);
@@ -818,22 +703,24 @@ public:
                 }
                 int tid = omp_get_thread_num();
                 
-                // :
-                if (index.enterpoint_node_ < 0 || index.enterpoint_node_ >= index.base_.num_) {
+                const int num_nodes = index.base_.num_;
+                if (num_nodes <= 0) {
                     continue;
                 }
-                
+
+                const int entry = rand() % num_nodes;
+
                 // NSG Branch and Bound
                 std::priority_queue<std::pair<float, int>> top_candidates;
                 std::priority_queue<std::pair<float, int>> candidate_set;
                 std::vector<bool> mass_visited(index.base_.num_, false);
                 size_t comparison = 0;
 
-                float init_dist = metrics::euclidean(base[start_id], index.base_[index.enterpoint_node_], index.base_.dim_);
+                float init_dist = metrics::euclidean(base[start_id], index.base_[entry], index.base_.dim_);
                 comparison++;
-                top_candidates.emplace(init_dist, index.enterpoint_node_); // max heap
-                candidate_set.emplace(-init_dist, index.enterpoint_node_); // min heap
-                mass_visited[index.enterpoint_node_] = true;
+                top_candidates.emplace(init_dist, entry); // max heap
+                candidate_set.emplace(-init_dist, entry); // min heap
+                mass_visited[entry] = true;
 
                 // 
                 int total_edge_checks = 0;
@@ -886,9 +773,9 @@ public:
                 }
                 
                 // ( 5 node )
-                if ((global_idx % 50000) == 0) {
+                if (((indices ? global_idx : start_id) % 50000) == 0) {
                     // 
-                    printf(" efq scan: first efq achieving recall>=0.99 is %d (recall=%.4f, qps=%.1f)\n", 
+                    printf("iter=%d, k=%d, truth_add=%d, tree_add=%d, total_add=%d, cut=%d, recallrange: %.3f-%.3f, qpsrange: %.1f-%.1f\n", 
                            start_id, total_edge_checks, adopted_edges, discarded_edges, efq_maintree);
                 }
             }
@@ -915,7 +802,7 @@ public:
                 }
             }
             
-            printf(" efq scan: first efq achieving recall>=0.99 is %d (recall=%.4f, qps=%.1f)\n", 
+            printf("iter=%d, k=%d, truth_add=%d, tree_add=%d, total_add=%d, cut=%d, recallrange: %.3f-%.3f, qpsrange: %.1f-%.1f\n", 
                    batch + 1, total_adopted_in_batch, total_discarded_in_batch);
             
             // local ,
@@ -968,7 +855,7 @@ public:
             }
         }
         
-        printf(" totaldistance evaluations :\n");
+        printf("Warning: distance evaluations , avgdistance evaluations\n");
         printf(" : %zu, : %d ( =%.2f%%)\n", 
                total_edges_sparse, total_adopted_sparse, total_discarded_sparse);
         printf(" : %zu, : %d ( =%.2f%%)\n", 
@@ -977,9 +864,9 @@ public:
         if (total_edges_sparse != total_edges_converted || 
             total_adopted_sparse != total_adopted_converted || 
             total_discarded_sparse != total_discarded_converted) {
-            printf(" totaldistance evaluations :\n");
+            printf("Warning: distance evaluations , avgdistance evaluations\n");
         } else {
-            printf(" totaldistance evaluations :\n");
+            printf("Warning: distance evaluations , avgdistance evaluations\n");
         }
         
         printf(" totaldistance evaluations :\n");
@@ -997,7 +884,7 @@ public:
     // Pruning
     int prune_edges_by_statistics_optimized(const vector<vector<pair<int, int>>>& edge_stats_by_node, 
                                            float prune_ratio) {
-        printf("Warning: distance evaluations , avgdistance evaluations\n");
+        printf(" totaldistance evaluations :\n");
         printf(" Pruning : %.1f%%\n", prune_ratio * 100);
         
         // discarded/adopted : adopted/adopted edge
@@ -1262,7 +1149,7 @@ public:
 
 class SmartEdgeAdder {
 private:
-    graph::NSG<float, metrics::euclidean>& index;
+    GraphType& index;
     int num_threads = 24;
     int return_k_ = 10;
 
@@ -1287,16 +1174,20 @@ private:
         const size_t idx = matrix_index(r, c);
         return idx < matrix.size() ? matrix[idx] : 0;
     }
-    
+
+    int pick_entry_point(int fallback_node = -1) const {
+        return rand() % index.base_.num_;
+    }
+
 public:
-    SmartEdgeAdder(graph::NSG<float, metrics::euclidean>& idx, int threads = 24, int return_k = 10)
+    SmartEdgeAdder(GraphType& idx, int threads = 24, int return_k = 10)
         : index(idx), num_threads(threads), return_k_(return_k) {}
 
     void set_return_k(int k) {
         return_k_ = k;
     }
     
-    // Edge insertion - PGB9_clear
+    // Edge insertion - PIGR9_clear
     int process_single_tree_and_add_edges(const float* query_data, int start_id, 
                                           int efq_maintree, int jump_max, int repeat_max) {
         int add_count = 0;
@@ -1309,29 +1200,25 @@ public:
             return 0;
         }
         
-        // :
-        if (index.enterpoint_node_ < 0 || index.enterpoint_node_ >= index.base_.num_) {
+        const int entry_point = pick_entry_point(start_id);
+        if (entry_point < 0 || entry_point >= index.base_.num_) {
             return 0;
         }
         
-        if (index.neighbors_[index.enterpoint_node_].empty()) {
-            return 0;
-        }
-        
-        // 1. ( PGB9_clear )
+        // 1. ( PIGR9_clear )
         std::priority_queue<std::pair<float, int>> visited;
         std::unordered_set<int> vis;
         
         // 
-        float init_dist = metrics::euclidean(query_data, index.base_[index.enterpoint_node_], index.base_.dim_);
-        visited.push(std::make_pair(-init_dist, index.enterpoint_node_));
-        vis.insert(index.enterpoint_node_);
+        float init_dist = metrics::euclidean(query_data, index.base_[entry_point], index.base_.dim_);
+        visited.push(std::make_pair(-init_dist, entry_point));
+        vis.insert(entry_point);
         
         // node ( )
         std::vector<std::pair<int, float>> node_dist_list;
-        node_dist_list.emplace_back(index.enterpoint_node_, init_dist);
+        node_dist_list.emplace_back(entry_point, init_dist);
         
-        // 2. - PGB9_clear
+        // 2. - PIGR9_clear
         int search_iterations = 0;
         const int max_search_iterations = efq_maintree * 2;
         
@@ -1385,13 +1272,13 @@ public:
             return 0;
         }
         
-        // 3. Edge insertion - PGB9_clear
+        // 3. Edge insertion - PIGR9_clear
         add_count += process_tree_for_edges(node_dist_list, start_id, jump_max, repeat_max);
         
         return add_count;
     }
     
-    // edge - PGB9_clear
+    // edge - PIGR9_clear
     int process_tree_for_edges(const std::vector<std::pair<int, float>>& node_dist_list, 
                               int tree_id, int jump_max, int repeat_max) {
         int add_count = 0;
@@ -1404,7 +1291,7 @@ public:
             return 0;
         }
         
-        // 1. , min k_subadj node - PGB9_clear
+        // 1. , min k_subadj node - PIGR9_clear
         std::vector<std::pair<int, float>> sorted_nodes = node_dist_list;
         std::sort(sorted_nodes.begin(), sorted_nodes.end(),
                   [](const std::pair<int, float>& a, const std::pair<int, float>& b) { return a.second < b.second; });
@@ -1418,7 +1305,7 @@ public:
             return 0;
         }
         
-        // 2. node id, id - PGB9_clear
+        // 2. node id, id - PIGR9_clear
         std::vector<int> selected_ids;
         std::unordered_map<int, int> id2idx;
         for (int i = 0; i < sorted_nodes.size(); ++i) {
@@ -1455,7 +1342,7 @@ public:
             sorted_nodes[replace_index] = {tree_id, target_dist};
         }
         
-        // 3. A0 - PGB9_clear
+        // 3. A0 - PIGR9_clear
         std::vector<int> A0(static_cast<size_t>(return_k_) * static_cast<size_t>(return_k_), 0);
         
         for (int i = 0; i < selected_ids.size(); ++i) {
@@ -1492,7 +1379,7 @@ public:
             }
         }
         
-        // 4. edge - PGB9_clear
+        // 4. edge - PIGR9_clear
         for (int repeat = 0; repeat < repeat_max; repeat++) {
             // Am1 = A0^jump_max ( )
             std::vector<int> Am1 = A0;
@@ -1608,7 +1495,7 @@ public:
         return add_count;
     }
     
-    // Edge insertion - PGB9_clear
+    // Edge insertion - PIGR9_clear
     int add_edges_by_search_tree(const DataSetWrapper<float>& base, 
                                  int efq_maintree, int jump_max = 5, int repeat_max = 5, int return_k = 10) {
         printf(" : adopted/adopted , edge\n");
@@ -1623,7 +1510,7 @@ public:
         }
         
         printf(" : %zu, %d \n", base.num_, num_threads);
-        printf(" Edge insertion ( )...\n");
+        printf(" : adopted/adopted , edge\n");
         
         // :
         int disconnected_nodes = 0;
@@ -1656,10 +1543,7 @@ public:
         
         #pragma omp parallel for schedule(dynamic, 32) num_threads(num_threads) reduction(+:total_add_count,completed_nodes,failed_nodes)
         for (int start_id = 0; start_id < base.num_; start_id++) {
-            // 10% ( )
-            if (rand() % 10 != 0) continue;
-            
-            // : ->Edge insertion->remove - PGB9_clear
+            // : ->Edge insertion->remove - PIGR9_clear
             int local_add_count = process_single_tree_and_add_edges(
                 base[start_id], start_id, efq_maintree, jump_max, repeat_max);
             
@@ -1700,7 +1584,7 @@ public:
 // edge - remove edge
 class EdgeImpactTester {
 private:
-    graph::NSG<float, metrics::euclidean>& index;
+    GraphType& index;
     TrackedSearchExecutor executor;
     const DataSetWrapper<float>& base;
     const vector<vector<pair<int, int>>>& edge_stats;
@@ -1711,7 +1595,7 @@ private:
     int max_base_points_per_edge_ = 100;
 
 public:
-        EdgeImpactTester(graph::NSG<float, metrics::euclidean>& idx, EdgeSearchTracker& tracker, 
+    EdgeImpactTester(GraphType& idx, EdgeSearchTracker& tracker, 
                                         const DataSetWrapper<float>& base_data,
                                         const vector<vector<pair<int, int>>>& stats,
                                                                                 const PseudoGroundTruth& train_gt,
@@ -1810,7 +1694,7 @@ public:
                         int milestone = expected;
                         if (next_progress_percent.compare_exchange_strong(expected,
                                 milestone + progress_step, std::memory_order_acq_rel)) {
-                            printf("Warning: node (%.2f%%), , Edge insertion \n",
+                            printf(" : totaledge =%d, node =%d (%.2f%%)\n",
                                    milestone, current_completed, total_tests,
                                    progress_ratio * 100.0);
                             break;
@@ -2009,7 +1893,7 @@ private:
             static thread_local int printed = 0;
             if (baseline_recall[bidx] <= 0.0 && printed < 5) {
                 const int* gt_row = (bidx >= 0 && bidx < static_cast<int>(train_gt_.num)) ? train_gt_.row(bidx) : nullptr;
-                printf(" impact_ratio stats: mean=%.4f%%, median=%.4f%%, max=%.4f%%\n",
+                printf(" remove : %.2f%%\n",
                        bidx, baseline_recall[bidx], results.size(),
                        results.empty() ? -1 : results[0],
                        gt_row ? gt_row[0] : -1,
@@ -2156,14 +2040,14 @@ private:
 
 class NewEdgePruningAlgorithm {
 private:
-    graph::NSG<float, metrics::euclidean>& index;
+    GraphType& index;
     const DataSetWrapper<float>& base;
     OptimizedEdgePruner& original_pruner;
     const PseudoGroundTruth& train_gt_;
     double sampling_ratio_ = 1.0;
     
 public:
-    NewEdgePruningAlgorithm(graph::NSG<float, metrics::euclidean>& idx, 
+    NewEdgePruningAlgorithm(GraphType& idx, 
                            const DataSetWrapper<float>& base_data, 
                            OptimizedEdgePruner& pruner,
                            const PseudoGroundTruth& train_gt) 
@@ -2175,10 +2059,10 @@ public:
             printf("Warning: %.4f , . \n", ratio);
             sanitized = 1.0;
         }
-        sanitized = min(1.0, sanitized);
+        sanitized = std::min(1.0, sanitized);
         double previous = sampling_ratio_;
         sampling_ratio_ = sanitized;
-    if (std::fabs(previous - sampling_ratio_) < 1e-12) {
+        if (std::fabs(previous - sampling_ratio_) < 1e-12) {
             return;
         }
         if (sampling_ratio_ >= 0.9999) {
@@ -2192,30 +2076,33 @@ public:
     // edge
     int execute_new_pruning_algorithm(float prune_ratio, int efq_for_tracking = 100, 
                                      int efq_for_testing = 100, int k = 10, int total_batches = 1) {
-     printf(" Pruning : seed set. \n");
-     vector<int> sampled_base_points = select_base_points();
-     if (sampled_base_points.empty()) {
-         sampled_base_points.resize(base.num_);
-         iota(sampled_base_points.begin(), sampled_base_points.end(), 0);
-         printf(" Pruning : seed set. \n");
-     }
-     const size_t sampled_count = sampled_base_points.size();
-     const double sampled_pct = base.num_ > 0 ? (100.0 * sampled_count / base.num_) : 0.0;
-     const bool use_full_dataset = sampled_pct >= 99.9;
+        printf(" Pruning : seed set. \n");
+        vector<int> sampled_base_points = select_base_points();
+        if (sampled_base_points.empty()) {
+            sampled_base_points.resize(base.num_);
+            std::iota(sampled_base_points.begin(), sampled_base_points.end(), 0);
+            printf(" Pruning : seed set. \n");
+        }
 
-     printf(" [Recall sample] edge %d->%d, base %d, Recall@%zu: with edge=%.4f, without edge=%.4f\n", 
-         prune_ratio, efq_for_tracking, efq_for_testing, k, total_batches,
-         sampled_count, base.num_, sampled_pct);
+        const size_t sampled_count = sampled_base_points.size();
+        const double sampled_pct = (base.num_ > 0)
+                                        ? (100.0 * static_cast<double>(sampled_count) / static_cast<double>(base.num_))
+                                        : 0.0;
+        const bool use_full_dataset = sampled_pct >= 99.9;
 
+        printf(" [Recall sample] edge %d->%d, base %d, Recall@%zu: with edge=%.4f, without edge=%.4f\n", 
+               prune_ratio, efq_for_tracking, efq_for_testing, k, total_batches,
+               sampled_count, base.num_, sampled_pct);
+        
         Timer total_timer;
         total_timer.start();
         
         // 
-     printf(" [Recall sample] edge %d->%d, base %d, Recall@%zu: with edge=%.4f, without edge=%.4f\n",
-         use_full_dataset ? " " : " ");
+        printf(" [Recall sample] edge %d->%d, base %d, Recall@%zu: with edge=%.4f, without edge=%.4f\n",
+               use_full_dataset ? " " : " ");
         // 
         vector<vector<pair<int, int>>> edge_stats_for_all =
-         original_pruner.build_edge_statistics_optimized(base, efq_for_tracking, total_batches, &sampled_base_points);
+            original_pruner.build_edge_statistics_optimized(base, efq_for_tracking, total_batches, &sampled_base_points);
 
         // adopted==0 edge, edgeremove
         vector<pair<int,int>> adopted_zero_edges;
@@ -2247,6 +2134,7 @@ public:
         vector<pair<int, int>> candidate_edges = select_candidate_edges_from_stats(edge_stats_for_all, prune_ratio);
         printf(" candidateedge: %zu \n", candidate_edges.size());
 
+        // 
         printf(" Pruning : seed set. \n");
         std::vector<std::pair<int, int>> edges_to_delete = candidate_edges;
         edges_to_delete.insert(edges_to_delete.end(), adopted_zero_edges.begin(), adopted_zero_edges.end());
@@ -2260,7 +2148,6 @@ public:
             return (static_cast<uint64_t>(u) << 32) | static_cast<uint64_t>(v);
         };
 
-        // dedup remove
         std::unordered_set<uint64_t> unique_edges;
         unique_edges.reserve(edges_to_delete.size() * 2 + 1);
         std::vector<std::pair<int, int>> deduped_edges;
@@ -2268,9 +2155,7 @@ public:
         for (const auto& e : edges_to_delete) {
             int u = e.first;
             int v = e.second;
-            if (u < 0 || u >= index.base_.num_ || v < 0 || v >= index.base_.num_) {
-                continue;
-            }
+            if (u < 0 || u >= index.base_.num_ || v < 0 || v >= index.base_.num_) continue;
             uint64_t key = compress_key(u, v);
             if (unique_edges.insert(key).second) {
                 deduped_edges.emplace_back(u, v);
@@ -2281,9 +2166,9 @@ public:
         std::vector<int> node_delete_count(index.base_.num_, 0);
         int deleted_count = 0;
         int blocked_count = 0;
-        for (const auto& e : deduped_edges) {
-            int u = e.first;
-            int v = e.second;
+        for (const auto& edge : deduped_edges) {
+            int u = edge.first;
+            int v = edge.second;
             if (node_delete_count[u] >= max_delete_per_node) {
                 blocked_count++;
                 continue;
@@ -2300,24 +2185,22 @@ public:
         total_timer.stop();
         printf(" Pruning : %.4f ( %.2f%% seed set )\n",
                deleted_count, blocked_count, total_timer.get());
-
         return deleted_count;
     }
     
 private:
     // for (support )
     vector<int> select_base_points() {
-        vector<int> base_points;
-        base_points.resize(base.num_);
-        iota(base_points.begin(), base_points.end(), 0);
+        vector<int> base_points(base.num_);
+        std::iota(base_points.begin(), base_points.end(), 0);
 
         if (sampling_ratio_ >= 0.9999 || base_points.empty()) {
             printf(" %zu base \n", base_points.size());
             return base_points;
         }
 
-    size_t sample_size = static_cast<size_t>(std::round(static_cast<double>(base_points.size()) * sampling_ratio_));
-        sample_size = max<size_t>(1, min(sample_size, base_points.size()));
+        size_t sample_size = static_cast<size_t>(std::round(static_cast<double>(base_points.size()) * sampling_ratio_));
+        sample_size = std::max<size_t>(1, std::min(sample_size, base_points.size()));
 
         std::random_device rd;
         std::mt19937 rng(rd());
@@ -2326,18 +2209,20 @@ private:
         std::sort(base_points.begin(), base_points.end());
 
         printf(" %zu base ( %.2f%%)for \n", base_points.size(),
-               base_points.empty() ? 0.0 : (100.0 * base_points.size() / base.num_));
+               base_points.empty() ? 0.0 : (100.0 * static_cast<double>(base_points.size()) / static_cast<double>(base.num_)));
         return base_points;
     }
     
-    // node candidateedge( PGB9_6clear_2 Pruning )
+    // node candidateedge( PIGR9_6clear_2 Pruning )
     vector<pair<int, int>> select_candidate_edges_by_existing_metrics(float prune_ratio, int efq_maintree, int total_batches) {
         (void)prune_ratio;
         printf("Warning: , . \n");
 
-        // 1) edge
+        // 
+        vector<int> sampled_base_points = select_base_points();
+        const vector<int>* sample_ptr = sampled_base_points.empty() ? nullptr : &sampled_base_points;
         vector<vector<pair<int, int>>> edge_stats =
-            original_pruner.build_edge_statistics_optimized(base, efq_maintree, total_batches);
+            original_pruner.build_edge_statistics_optimized(base, efq_maintree, total_batches, sample_ptr);
 
         vector<pair<int, int>> edges_with_access;
         edges_with_access.reserve(index.base_.num_);
@@ -2363,7 +2248,7 @@ private:
         }
 
         if (edges_with_access.empty()) {
-            printf(" candidateedge remove, . \n");
+            printf("\n=== : skipcandidateedge , edgeremove ===\n");
             return {};
         }
 
@@ -2475,7 +2360,7 @@ private:
                                         size_t max_examples = 10) {
         size_t detail_count = std::min(max_examples, results.size());
         if (detail_count == 0) {
-            printf("candidate - :\n");
+            printf("Warning: adopted>0 edge, candidate\n");
             return;
         }
 
@@ -2821,7 +2706,7 @@ public:
     }
 
     // efq : recall>=target_recall efq , recall/qps
-    int find_optimal_efq_for_target_recall(graph::NSG<float, metrics::euclidean>& index,
+    int find_optimal_efq_for_target_recall(GraphType& index,
                                           const DataSetWrapper<float>& dataset,
                                           const GroundTruth& gt,
                                           int k,
@@ -2934,7 +2819,7 @@ public:
     }
 
     // efq recall( , for )
-    float evaluate_recall_for_fixed_efq(graph::NSG<float, metrics::euclidean>& index,
+    float evaluate_recall_for_fixed_efq(GraphType& index,
                                         const DataSetWrapper<float>& dataset,
                                         const GroundTruth& gt,
                                         int k,
@@ -2963,7 +2848,7 @@ public:
     }
     
     // efqparameters: k=10 recall >= 0.99 efq
-    int find_optimal_efq_for_recall_99(graph::NSG<float, metrics::euclidean>& index,
+    int find_optimal_efq_for_recall_99(GraphType& index,
                                       const DataSetWrapper<float>& query, 
                                       const GroundTruth& gt,
                                       int R, int efc, int k = 10) {
@@ -3012,7 +2897,7 @@ public:
     }
     
     // 
-    float calculate_improvement_ratio(graph::NSG<float, metrics::euclidean>& index,
+    float calculate_improvement_ratio(GraphType& index,
                                     const DataSetWrapper<float>& query, 
                                     const GroundTruth& gt,
                                     int R, int efc, int k) {
@@ -3028,7 +2913,7 @@ public:
         
         // 
         if (current_recall_qps.size() < 2 || previous_recall_qps.size() < 2) {
-            printf(" k=%d , efq 500\n", k);
+            printf(" efqparameters: k=%d recall >= 0.99 efq \n", k);
             return 1.5f;
         }
         
@@ -3082,11 +2967,11 @@ public:
     }
 };
 
-// ======================== PGB9_2 ========================
+// ======================== PIGR9_2 ========================
 
-class PGB9_2Algorithm {
+class PIGR9_2Algorithm {
 private:
-    graph::NSG<float, metrics::euclidean>& index;
+    GraphType& index;
     const DataSetWrapper<float>& base;
     const DataSetWrapper<float>& query;
     const GroundTruth& gt;
@@ -3099,14 +2984,15 @@ private:
     Timer timer;
     
     struct Parameters {
-        int R = 16;
-        int efc = 96;
+        int T = 10;
+        int Ls = 100;
+        int s = 16;
         int iternum = 20;
         int efq_maintree_prune = 1000;
         int efq_maintree_add = 500;
     int efq_train_gt = 2000;
         int efq_max = 1000;
-        int efq_step = 80;
+        int efq_step = 30;
         int jump_max = 5;
         int repeat_max = 2;
         int flag_period = 1;
@@ -3130,7 +3016,7 @@ private:
         int efq_global_connectivity = 800;
         
         string base_csv_path = "";
-        string csv_path = "out/performance_PGB9_2clear_sift_optimized.csv";
+        string csv_path = "out/performance_PIGR9_2clear_sift_optimized.csv";
         // QPS kparameters
         int k1 = 1;
         int k2 = 10;
@@ -3139,7 +3025,7 @@ private:
     } params;
     
 public:
-        PGB9_2Algorithm(graph::NSG<float, metrics::euclidean>& idx,
+    PIGR9_2Algorithm(GraphType& idx,
                     const DataSetWrapper<float>& base_data,
                     const DataSetWrapper<float>& query_data,
                     const GroundTruth& ground_truth,
@@ -3152,13 +3038,13 @@ public:
     }
     
     // parameters
-    void set_parameters(int R, int efc, int iternum, const string& base_csv_path) {
-        params.R = R;
-        params.efc = efc;
-        params.iternum = iternum;
+    void set_parameters(int T, int Ls, int s, const string& base_csv_path) {
+        params.T = T;
+        params.Ls = Ls;
+        params.s = s;
         params.base_csv_path = base_csv_path;
         
-        printf(" parameters: R=%d, efc=%d, =%d\n", R, efc, iternum);
+        printf(" parameters: T=%d, Ls=%d, s=%d\n", T, Ls, s);
         printf("Base CSV path: %s\n", base_csv_path.c_str());
     }
     
@@ -3229,7 +3115,7 @@ public:
     }
     
     // efqparameters
-    void adjust_efq_parameters_dynamically(graph::NSG<float, metrics::euclidean>& index,
+    void adjust_efq_parameters_dynamically(GraphType& index,
                                           const DataSetWrapper<float>& query, 
                                           const GroundTruth& gt) {
         printf(" : ( )\n");
@@ -3238,9 +3124,9 @@ public:
         float qps_unified = 0.0f;
         const float target_recall_unified = params.efq_prune_target_recall;
         int efq_for_unified = strategy_manager.find_optimal_efq_for_target_recall(
-            index, query, gt, params.unified_k, target_recall_unified, 5, 400, 40, 2000,
+            index, query, gt, params.unified_k, target_recall_unified, 5, 100, 20, 2000,
             &recall_unified, &qps_unified);
-
+        
         int k_for_train_gt = params.unified_k;
         if (k_for_train_gt <= 0) {
             printf("Warning: k<=0, pseudo-GT k=%d\n", params.k3);
@@ -3264,15 +3150,15 @@ public:
         params.efq_maintree_prune = efq_for_unified;
         params.efq_train_gt = efq_train_gt;
         params.efq_maintree_add = std::max(efq_for_unified * 2, efq_train_gt);
-        
-        printf("Warning: pseudo-GTfixedefq<=0, 2000\n");
-        printf(" Pruningefq_maintree: %d -> %d (k=%d, target_recall=%.4f, recall=%.4f, qps=%.1f)\n",
+
+        printf(" efqparameters...\n");
+        printf("Warning: pseudo-GTfixedefq=%d , %d\n",
                old_prune, params.efq_maintree_prune, params.unified_k, target_recall_unified,
                recall_unified, qps_unified);
-        printf(" Pruningefq_maintree: %d -> %d (k=%d, target_recall=%.4f, recall=%.4f, qps=%.1f)\n",
+        printf("Warning: pseudo-GTfixedefq=%d , %d\n",
                old_train_gt, params.efq_train_gt, k_for_train_gt, recall_train_gt, qps_train_gt);
         printf(" Edge insertionefq_maintree: %d -> %d\n", old_add, params.efq_maintree_add);
-            
+
         //regenerate_train_ground_truth(params.efq_train_gt, params.unified_k);
     
     }
@@ -3420,7 +3306,7 @@ private:
         float measured_qps = 0.0f;
         if (target_recall > 0.0f) {
             params.efq_global_connectivity = strategy_manager.find_optimal_efq_for_target_recall(
-                index, query, gt, degree, target_recall, 5, 40, 10, 2000,
+                index, query, gt, degree, target_recall, 5, 10, 2, 2000,
                 &measured_recall, &measured_qps);
         } else {
             measured_recall = 0.0f;
@@ -3576,8 +3462,8 @@ private:
                     continue;
                 }
 
-                int edges_added_now = 0;
                 bool edge_added = false;
+                int edges_added_now = 0;
                 #pragma omp critical(nsg_neighbor_update)
                 {
                     auto& source_neighbors = index.neighbors_[best_source];
@@ -3630,11 +3516,7 @@ private:
                        node, sample_k, before, after, after - before);
             }
         } else if (!sample_nodes.empty() && params.efq_global_connectivity <= 0) {
-            printf("\n=== PGB_nsg ( ) ===\n");
-        }
-
-        if (added_edges > 0) {
-            index.R_ = std::max(index.R_, static_cast<size_t>(degree));
+            printf("\n=== PIGR_hcnng ( ) ===\n");
         }
 
         return added_edges;
@@ -3651,15 +3533,16 @@ public:
         tester.init_csv(params.csv_path);
         
         printf("\n=== ===\n");
-        auto [baseline_comparisons, baseline_aecr] = tester.calculate_total_comparisons(params.unified_k);
-        printf(" avgdistance evaluations=%.2f, aecr=%.2f\n,recall=%.2f", baseline_comparisons, baseline_aecr,0.99);
+        auto [avg_comps_baseline, acer_baseline] = tester.calculate_total_comparisons(params.unified_k);
+        printf(" avgdistance evaluations=%.2f, ACER=%.6f\n", avg_comps_baseline, acer_baseline);
         
         const int test_ks[4] = {params.k1, params.k2, params.k3, params.k4};
         for (int k : test_ks) {
-            tester.test_and_record(params.csv_path, params.R, params.efc, 0, k, 0,
-                                   0, 0, params.efq_max, params.efq_step, baseline_aecr, baseline_comparisons, 0);
-                                }
-        
+            tester.test_and_record(params.csv_path, index.T_, index.Ls_, index.s_, 0, k,
+                                   0, 0, 0, avg_comps_baseline, acer_baseline, 0.0,
+                                   params.efq_max, params.efq_step);
+        }
+
         int total_cut_edges = 0;
         int total_truth_add_edges = 0;
         int total_tree_add_edges = 0;
@@ -3674,17 +3557,16 @@ public:
             
             adjust_efq_parameters_dynamically(index, query, gt);
             
-            auto [pre_comparisons, pre_efq] = tester.calculate_total_comparisons(params.unified_k);
-            printf(" avgdistance evaluations=%.2f, efq=%d\n", pre_comparisons, pre_efq);
+            auto [pre_avg_comps, pre_acer] = tester.calculate_total_comparisons(params.unified_k);
+            printf(" avgdistance evaluations=%.2f, ACER=%.6f\n", pre_avg_comps, pre_acer);
 
             int operation_result = 0;
             int pruned_edges = 0;
             int local_added = 0;
             int global_added = 0;
             
-            Timer opt_timer;
-            opt_timer.reset();
-            opt_timer.start();
+            timer.reset();
+            timer.start();
 
             if (current_operation == OperationType::Pruning) {
                 NewEdgePruningAlgorithm pruner_runner(index, base, pruner, train_gt_);
@@ -3700,37 +3582,47 @@ public:
                 printf(" Pruning stage: removed edges=%d, cumulative removed=%d\n", pruned_edges, total_cut_edges);
             } else {
                 
+                regenerate_train_ground_truth(params.efq_train_gt, params.unified_k);
+
+                global_added = strengthen_global_connectivity_from_train_gt(params.unified_k);
+                if (global_added > 0) {
+                    printf(" global : addedge=%d\n", global_added);
+                }
+
                 local_added = smart_adder.add_edges_by_search_tree(
-                    base, params.efq_max, params.jump_max, params.repeat_max,params.unified_k);
+                    base, params.efq_maintree_add, params.jump_max, params.repeat_max, params.unified_k);
                 if (local_added > 0) {
                     printf(" localEdge insertion : addedge=%d\n", local_added);
                 }
-                
+
                 operation_result = local_added + global_added;
                 total_truth_add_edges += global_added;
                 total_tree_add_edges += local_added;
                 const int total_added_edges = total_truth_add_edges + total_tree_add_edges;
-                printf("total : removeedge =%d, truth_add=%d, tree_add=%d, totaladd=%d, =%d\n",
+                printf(" Edge insertion stage: local=%d, global=%d, cumulative added (truth=%d, tree=%d, total=%d)\n",
                        local_added, global_added, total_truth_add_edges, total_tree_add_edges, total_added_edges);
             }
-            opt_timer.stop();
-            double opt_time = opt_timer.get();
-            opt_timer.reset();
+            
+            timer.stop();
+            double opt_time = timer.get();
+            printf(" : %.2f \n", opt_time);
 
-            auto [post_comparisons, post_acer] = tester.calculate_total_comparisons(params.unified_k);
-            printf(" avgdistance evaluations=%.2f, acer=%.6f\n", post_comparisons, post_acer);
+            auto [post_avg_comps, post_acer] = tester.calculate_total_comparisons(params.unified_k);
+            printf(" avgdistance evaluations=%.2f, ACER=%.6f\n", post_avg_comps, post_acer);
 
             for (int k : test_ks) {
-                tester.test_and_record(params.csv_path, params.R, params.efc, iter, k,
-                                   total_truth_add_edges, total_tree_add_edges, total_cut_edges, params.efq_max, params.efq_step, post_acer, post_comparisons, opt_time);
-        }
+                tester.test_and_record(params.csv_path, index.T_, index.Ls_, index.s_, iter, k,
+                                       total_truth_add_edges, total_tree_add_edges, total_cut_edges,
+                                       post_avg_comps, post_acer, opt_time,
+                                       params.efq_max, params.efq_step);
+            }
 
             if (operation_result == 0) {
-                printf("\n=== PGB9_2 ===\n");
+                printf("\n=== PIGR_hcnng ===\n");
             }
-            
+
             if (total_cut_edges > 100000000) {
-                printf("\n=== PGB9_2 ===\n");
+                printf("\n=== PIGR_hcnng ===\n");
                 break;
             }
 
@@ -3743,7 +3635,7 @@ public:
         }
 
      const int grand_total_add_edges = total_truth_add_edges + total_tree_add_edges;
-     printf("\n=== PGB9_2 ===\n");
+     printf("\n=== PIGR_hcnng ===\n");
      printf("total : removeedge =%d, truth_add=%d, tree_add=%d, totaladd=%d, =%d\n",
          total_cut_edges, total_truth_add_edges, total_tree_add_edges, grand_total_add_edges, switch_count);
     }
@@ -3756,7 +3648,7 @@ inline int run(const Config& cfg)
 {
     if (cfg.base_path.empty() || cfg.query_path.empty() || cfg.gt_path.empty() || cfg.index_path.empty())
     {
-        std::cerr << "[pgb::refiner::nsg] Missing required paths (base/query/gt/index)." << std::endl;
+        std::cerr << "[pigr::refiner::hcnng] Missing required paths (base/query/gt/index)." << std::endl;
         return 2;
     }
 
@@ -3765,11 +3657,11 @@ inline int run(const Config& cfg)
     GroundTruth gt(cfg.gt_path);
     PseudoGroundTruth train_gt;
 
-    graph::NSG<float, metrics::euclidean> index(base, cfg.index_path);
+    graph::HCNNG<float, metrics::euclidean> index(base, cfg.index_path);
 
     Timer timer;
     PerformanceTester tester(index, base, query, gt, timer, cfg.threads);
-    PGB9_2Algorithm algorithm(index, base, query, gt, train_gt, tester, cfg.threads);
+    PIGR9_2Algorithm algorithm(index, base, query, gt, train_gt, tester, cfg.threads);
 
     algorithm.set_parameters(cfg.param1, cfg.param2, cfg.param3, cfg.log_csv);
 
@@ -3791,4 +3683,4 @@ inline int run(const Config& cfg)
 }
 
 
-}}} // namespace pgb::refiner::nsg
+}}} // namespace pigr::refiner::hcnng

@@ -193,13 +193,11 @@ See `reproduce/README.md` for quick, SIFT-based, and full paper-style workflows.
 
 ## Extended Technical Report
 
-An optional extended technical report PDF may be placed at:
+This repository includes a full-length extended technical report PDF at:
 
 ```text
-paper/PIGR_extended_technical_report.pdf
+paper/KDD_PIGR_full_16pages.pdf
 ```
-
-No extended report PDF is currently included.
 
 ## Citation
 

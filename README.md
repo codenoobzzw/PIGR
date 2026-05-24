@@ -171,7 +171,7 @@ Run the sanity script:
 ./scripts/run_sanity.sh
 ```
 
-The script checks required binaries, data files, and indexes. If data or indexes are missing, it exits with a clear error and points to `docs/DATA.md`. By default it runs the HNSW sanity path and writes CSV output under `out/`, such as `out/hnsw_final.csv`.
+The script checks required binaries, data files, and indexes. If data or indexes are missing, it exits with a clear error and points to `docs/DATA.md`. By default it runs the HNSW sanity path and writes CSV output under `out/`, such as `out/hnsw_final_prune0.020_jump8_repeat1.csv`.
 
 To run multiple default runners:
 

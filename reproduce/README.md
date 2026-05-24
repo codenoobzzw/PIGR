@@ -20,9 +20,9 @@ PIGR_SANITY_RUNNERS="hnsw nsg hcnng" ./scripts/run_sanity.sh
 Expected CSV outputs are written under `out/`, for example:
 
 ```text
-out/hnsw_final.csv
-out/nsg_final.csv
-out/hcnng_final.csv
+out/hnsw_final_prune0.020_jump8_repeat1.csv
+out/nsg_final_prune0.020_jump8_repeat1.csv
+out/hcnng_final_prune0.020_jump8_repeat1.csv
 ```
 
 ## SIFT-Based Run

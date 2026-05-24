@@ -35,23 +35,28 @@ RUNNERS="${PIGR_SANITY_RUNNERS:-hnsw}"
 
 mkdir -p out
 
+expected_csv() {
+  local base_csv="$1"
+  echo "${base_csv%.csv}_prune0.020_jump8_repeat1.csv"
+}
+
 run_one() {
   local runner="$1"
   case "$runner" in
     hnsw)
       require_file "indices/sift-128-euclidean/hnsw/M_16_efc_96.idx"
       ./bin/run_hnsw_final
-      require_file "out/hnsw_final.csv"
+      require_file "$(expected_csv "out/hnsw_final.csv")"
       ;;
     nsg)
       require_file "indices/sift-128-euclidean/nsg/R_64_efc_256.idx"
       ./bin/run_nsg_final
-      require_file "out/nsg_final.csv"
+      require_file "$(expected_csv "out/nsg_final.csv")"
       ;;
     hcnng)
       require_file "indices/sift-128-euclidean/hcnng/s_7_T_15_Ls_1250.idx"
       ./bin/run_hcnng_final
-      require_file "out/hcnng_final.csv"
+      require_file "$(expected_csv "out/hcnng_final.csv")"
       ;;
     *)
       die "Unknown runner '$runner'. Use hnsw, nsg, hcnng, or a space-separated combination."

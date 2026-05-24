@@ -173,6 +173,12 @@ Run the sanity script:
 
 The script checks required binaries, data files, and indexes. If data or indexes are missing, it exits with a clear error and points to `docs/DATA.md`. By default it runs the HNSW sanity path and writes CSV output under `out/`, such as `out/hnsw_final_prune0.020_jump8_repeat1.csv`.
 
+For a shorter local check on real SIFT1M data, reduce the refinement loop count to one pruning step and one edge-insertion step:
+
+```bash
+PIGR_ITERATIONS=2 ./scripts/run_sanity.sh
+```
+
 To run multiple default runners:
 
 ```bash

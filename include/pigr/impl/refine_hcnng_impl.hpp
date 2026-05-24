@@ -3047,6 +3047,13 @@ public:
         printf(" parameters: T=%d, Ls=%d, s=%d\n", T, Ls, s);
         printf("Base CSV path: %s\n", base_csv_path.c_str());
     }
+
+    void set_iterations(int iternum) {
+        if (iternum > 0) {
+            params.iternum = iternum;
+        }
+        printf(" iterations: %d\n", params.iternum);
+    }
     
     // edge parameters
     void set_edge_parameters(float prune_ratio, int jump_max, int repeat_max) {
@@ -3664,6 +3671,7 @@ inline int run(const Config& cfg)
     PIGR9_2Algorithm algorithm(index, base, query, gt, train_gt, tester, cfg.threads);
 
     algorithm.set_parameters(cfg.param1, cfg.param2, cfg.param3, cfg.log_csv);
+    algorithm.set_iterations(cfg.iterations);
 
     algorithm.set_efq_parameters(cfg.efq_prune_init, cfg.efq_add_init);
     algorithm.set_dynamic_efq_targets(cfg.dynamic_target_recall, cfg.dynamic_max_efq);

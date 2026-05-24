@@ -1,9 +1,20 @@
 #include <graph/hcnng.hpp>
 #include <pigr/refine_hcnng.hpp>
+#include <cstdlib>
 #include <filesystem>
 #include <string>
 
 namespace {
+int read_positive_env(const char* name, int fallback)
+{
+    const char* value = std::getenv(name);
+    if (!value || !*value) {
+        return fallback;
+    }
+    const int parsed = std::atoi(value);
+    return parsed > 0 ? parsed : fallback;
+}
+
 std::string resolve_input_path(const std::string& path)
 {
     namespace fs = std::filesystem;
@@ -48,6 +59,7 @@ int main(int /*argc*/, char** /*argv*/)
     cfg.param1 = 15;    // T
     cfg.param2 = 1250;  // Ls
     cfg.param3 = 7;     // s
+    cfg.iterations = read_positive_env("PIGR_ITERATIONS", cfg.iterations);
 
     cfg.efq_prune_init = 500;
     cfg.efq_add_init   = 500;

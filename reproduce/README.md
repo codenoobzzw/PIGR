@@ -6,7 +6,7 @@ From the repository root:
 
 ```bash
 ./scripts/build.sh
-./scripts/run_sanity.sh
+PIGR_ITERATIONS=2 ./scripts/run_sanity.sh
 ```
 
 The sanity script checks required binaries, required data files, and the selected default index before running. If required files are missing, it exits with a clear message and points to `docs/DATA.md`.

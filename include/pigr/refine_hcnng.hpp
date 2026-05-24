@@ -29,6 +29,7 @@ struct Config {
     int param1 = 16;
     int param2 = 96;
     int param3 = 14;
+    int iterations = 20;
 
     // efq knobs
     int efq_prune_init = 500;

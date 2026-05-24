@@ -4,7 +4,19 @@
   "description": "Software artifact for PIGR, a post-hoc, trace-driven graph refinement framework for graph-based approximate nearest neighbor search.",
   "creators": [
     {
-      "name": "PIGR Authors"
+      "name": "Zhang, Zhiwei",
+      "affiliation": "School of Data Science, Fudan University, Shanghai, China"
+    },
+    {
+      "name": "Zheng, Weiguo",
+      "affiliation": "School of Data Science, Fudan University, Shanghai, China"
+    }
+  ],
+  "contributors": [
+    {
+      "name": "Zheng, Weiguo",
+      "affiliation": "School of Data Science, Fudan University, Shanghai, China",
+      "type": "ContactPerson"
     }
   ],
   "license": "MIT",

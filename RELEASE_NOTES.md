@@ -8,4 +8,4 @@ Known notes:
 
 - Large datasets and generated indexes are not included.
 - ACM paper DOI: 10.1145/3770855.3817671.
-- Zenodo DOI will be generated after this GitHub release is archived.
+- Zenodo artifact DOI: 10.5281/zenodo.20363286.

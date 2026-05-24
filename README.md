@@ -15,7 +15,7 @@ This artifact currently includes runners for these graph families:
 - Paper title: Beyond Structure-Driven Tuning: Cost-Aligned Graph Optimization for Approximate Nearest Neighbor Search
 - Venue: KDD 2026
 - Paper DOI: 10.1145/3770855.3817671
-- Artifact DOI: TODO: Zenodo DOI after GitHub release
+- Artifact DOI: 10.5281/zenodo.20363286
 
 ## Artifact Scope
 

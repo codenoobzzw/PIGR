@@ -2,6 +2,7 @@ cff-version: 1.2.0
 message: "If you use PIGR, please cite the associated KDD 2026 paper and this software artifact."
 title: "PIGR: Post-hoc Iterative Graph Refinement"
 version: "1.0.0-kdd2026"
+doi: "10.5281/zenodo.20363286"
 repository-code: "https://github.com/codenoobzzw/PIGR"
 license: MIT
 authors:

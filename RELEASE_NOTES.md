@@ -7,5 +7,5 @@ This release includes source code, build instructions, dataset preparation notes
 Known notes:
 
 - Large datasets and generated indexes are not included.
-- Paper DOI will be added after ACM RightsReview.
+- ACM paper DOI: 10.1145/3770855.3817671.
 - Zenodo DOI will be generated after this GitHub release is archived.

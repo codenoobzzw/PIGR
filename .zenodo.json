@@ -21,6 +21,12 @@
       "relation": "isSupplementTo",
       "scheme": "url",
       "resource_type": "software"
+    },
+    {
+      "identifier": "10.1145/3770855.3817671",
+      "relation": "isSupplementTo",
+      "scheme": "doi",
+      "resource_type": "publication-conferencepaper"
     }
   ]
 }
